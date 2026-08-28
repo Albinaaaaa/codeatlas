@@ -1,6 +1,6 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "CodeAtlas",
+    "name": "codeatlas/codeatlas",
     "type": "project",
     "description": "Living architecture documentation and code intelligence for Laravel applications",
     "keywords": [
@@ -67,7 +67,7 @@
             "@test"
         ],
         "types:check": [
-            "phpstan analyse"
+            "php -d memory_limit=1G vendor/bin/phpstan analyse"
         ],
         "test": [
             "@php artisan config:clear --ansi",

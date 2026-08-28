@@ -1,0 +1,147 @@
+name: codeatlas
+
+services:
+    app:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            target: development
+        restart: unless-stopped
+        working_dir: /var/www/html
+        env_file:
+            - .env
+        volumes:
+            - .:/var/www/html
+        depends_on:
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+        networks:
+            - codeatlas
+
+    nginx:
+        image: nginx:1.29-alpine
+        restart: unless-stopped
+        ports:
+            - "8080:80"
+        volumes:
+            - .:/var/www/html:ro
+            - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+        depends_on:
+            - app
+        networks:
+            - codeatlas
+
+    vite:
+        image: node:26-alpine
+        restart: unless-stopped
+        working_dir: /var/www/html
+        command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+        ports:
+            - "5173:5173"
+        volumes:
+            - .:/var/www/html
+            - node_modules:/var/www/html/node_modules
+        networks:
+            - codeatlas
+
+    horizon:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            target: development
+        restart: unless-stopped
+        working_dir: /var/www/html
+        command: php artisan horizon
+        env_file:
+            - .env
+        volumes:
+            - .:/var/www/html
+        depends_on:
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+        networks:
+            - codeatlas
+
+    scheduler:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            target: development
+        restart: unless-stopped
+        working_dir: /var/www/html
+        command: php artisan schedule:work
+        env_file:
+            - .env
+        volumes:
+            - .:/var/www/html
+        depends_on:
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+        networks:
+            - codeatlas
+
+    postgres:
+        image: pgvector/pgvector:0.8.6-pg18
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: ${DB_DATABASE:-codeatlas}
+            POSTGRES_USER: ${DB_USERNAME:-codeatlas}
+            POSTGRES_PASSWORD: ${DB_PASSWORD:-codeatlas}
+        ports:
+            - "5432:5432"
+        volumes:
+            - postgres_data:/var/lib/postgresql
+        healthcheck:
+            test:
+              [
+                  "CMD-SHELL",
+                  "pg_isready -U ${DB_USERNAME:-codeatlas} -d ${DB_DATABASE:-codeatlas}"
+              ]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+            start_period: 10s
+        networks:
+            - codeatlas
+
+    redis:
+        image: redis:8-alpine
+        restart: unless-stopped
+        command: redis-server --appendonly yes
+        ports:
+            - "6379:6379"
+        volumes:
+            - redis_data:/data
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 5s
+            timeout: 3s
+            retries: 10
+        networks:
+            - codeatlas
+
+    ollama:
+        image: ollama/ollama:latest
+        restart: unless-stopped
+        ports:
+            - "11434:11434"
+        volumes:
+            - ollama_data:/root/.ollama
+        networks:
+            - codeatlas
+
+networks:
+    codeatlas:
+        driver: bridge
+
+volumes:
+    postgres_data:
+    redis_data:
+    ollama_data:
+    node_modules:
