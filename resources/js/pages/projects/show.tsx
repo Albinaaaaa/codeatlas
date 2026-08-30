@@ -3,20 +3,23 @@ import { FolderOpen } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { translate, useTranslations } from '@/hooks/use-translations';
 import { index, show } from '@/routes/projects';
-import type { ProjectSummary } from '@/types';
+import type { Locale, LocalizationData, ProjectSummary } from '@/types';
 
 type Props = {
     project: ProjectSummary;
 };
 
-function formatDate(date: string): string {
-    return new Intl.DateTimeFormat(undefined, {
+function formatDate(date: string, locale: Locale): string {
+    return new Intl.DateTimeFormat(locale === 'uk' ? 'uk-UA' : 'en-US', {
         dateStyle: 'medium',
     }).format(new Date(date));
 }
 
 export default function ProjectsShow({ project }: Props) {
+    const { locale, t } = useTranslations();
+
     return (
         <>
             <Head title={project.name} />
@@ -35,9 +38,7 @@ export default function ProjectsShow({ project }: Props) {
                                         : 'secondary'
                                 }
                             >
-                                {project.status === 'connected'
-                                    ? 'Connected'
-                                    : 'No source'}
+                                {t(`projects.status.${project.status}`)}
                             </Badge>
                         </div>
                         {project.description && (
@@ -49,12 +50,14 @@ export default function ProjectsShow({ project }: Props) {
                             dateTime={project.created_at}
                             className="block text-sm text-muted-foreground"
                         >
-                            Created {formatDate(project.created_at)}
+                            {t('projects.created_at', {
+                                date: formatDate(project.created_at, locale),
+                            })}
                         </time>
                     </div>
 
                     <Button variant="outline" asChild>
-                        <Link href={index()}>Back to projects</Link>
+                        <Link href={index()}>{t('projects.show.back')}</Link>
                     </Button>
                 </div>
 
@@ -65,11 +68,10 @@ export default function ProjectsShow({ project }: Props) {
                         </div>
                         <div className="space-y-1">
                             <h2 className="font-medium">
-                                No source connected yet.
+                                {t('projects.show.empty_title')}
                             </h2>
                             <p className="text-sm text-muted-foreground">
-                                Source connections will be available in a future
-                                step.
+                                {t('projects.show.empty_description')}
                             </p>
                         </div>
                     </CardContent>
@@ -79,10 +81,13 @@ export default function ProjectsShow({ project }: Props) {
     );
 }
 
-ProjectsShow.layout = ({ project }: Props) => ({
+ProjectsShow.layout = ({
+    project,
+    localization,
+}: Props & { localization: LocalizationData }) => ({
     breadcrumbs: [
         {
-            title: 'Projects',
+            title: translate(localization.translations, 'navigation.projects'),
             href: index(),
         },
         {

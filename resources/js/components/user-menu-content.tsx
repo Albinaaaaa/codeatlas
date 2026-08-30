@@ -1,16 +1,21 @@
 import { Link, router } from '@inertiajs/react';
-import { LogOut, Settings } from 'lucide-react';
+import { Languages, LogOut, Settings } from 'lucide-react';
 import {
     DropdownMenuGroup,
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
 import { UserInfo } from '@/components/user-info';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
+import { useTranslations } from '@/hooks/use-translations';
 import { logout } from '@/routes';
+import { update as updateLocale } from '@/routes/locale';
 import { edit } from '@/routes/profile';
-import type { User } from '@/types';
+import type { Locale, User } from '@/types';
 
 type Props = {
     user: User;
@@ -18,10 +23,26 @@ type Props = {
 
 export function UserMenuContent({ user }: Props) {
     const cleanup = useMobileNavigation();
+    const { locale, t } = useTranslations();
 
     const handleLogout = () => {
         cleanup();
         router.flushAll();
+    };
+
+    const handleLocaleChange = (nextLocale: Locale) => {
+        if (nextLocale === locale) {
+            return;
+        }
+
+        router.patch(
+            updateLocale(),
+            { locale: nextLocale },
+            {
+                preserveScroll: true,
+                preserveState: false,
+            },
+        );
     };
 
     return (
@@ -41,9 +62,29 @@ export function UserMenuContent({ user }: Props) {
                         onClick={cleanup}
                     >
                         <Settings className="mr-2" />
-                        Settings
+                        {t('user_menu.settings')}
                     </Link>
                 </DropdownMenuItem>
+                <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                        <Languages className="mr-2" />
+                        {t('user_menu.language')}
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                        <DropdownMenuItem
+                            disabled={locale === 'en'}
+                            onSelect={() => handleLocaleChange('en')}
+                        >
+                            {t('user_menu.english')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            disabled={locale === 'uk'}
+                            onSelect={() => handleLocaleChange('uk')}
+                        >
+                            {t('user_menu.ukrainian')}
+                        </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                </DropdownMenuSub>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
@@ -55,7 +96,7 @@ export function UserMenuContent({ user }: Props) {
                     data-test="logout-button"
                 >
                     <LogOut className="mr-2" />
-                    Log out
+                    {t('user_menu.logout')}
                 </Link>
             </DropdownMenuItem>
         </>

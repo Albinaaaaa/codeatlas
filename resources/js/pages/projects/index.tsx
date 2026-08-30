@@ -10,44 +10,42 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import { translate, useTranslations } from '@/hooks/use-translations';
 import { create, index, show } from '@/routes/projects';
-import type { ProjectStatus, ProjectSummary } from '@/types';
+import type { Locale, LocalizationData, ProjectSummary } from '@/types';
 
 type Props = {
     projects: ProjectSummary[];
 };
 
-const statusLabels: Record<ProjectStatus, string> = {
-    connected: 'Connected',
-    not_connected: 'No source',
-};
-
-function formatDate(date: string): string {
-    return new Intl.DateTimeFormat(undefined, {
+function formatDate(date: string, locale: Locale): string {
+    return new Intl.DateTimeFormat(locale === 'uk' ? 'uk-UA' : 'en-US', {
         dateStyle: 'medium',
     }).format(new Date(date));
 }
 
 export default function ProjectsIndex({ projects }: Props) {
+    const { locale, t } = useTranslations();
+
     return (
         <>
-            <Head title="Projects" />
+            <Head title={t('projects.index.title')} />
 
             <div className="flex h-full flex-1 flex-col gap-6 overflow-x-auto p-4 md:p-6">
                 <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
                     <div>
                         <h1 className="text-2xl font-semibold tracking-tight">
-                            Projects
+                            {t('projects.index.title')}
                         </h1>
                         <p className="mt-1 text-sm text-muted-foreground">
-                            Browse and manage your CodeAtlas projects.
+                            {t('projects.index.description')}
                         </p>
                     </div>
 
                     <Button asChild>
                         <Link href={create()}>
                             <Plus />
-                            New project
+                            {t('projects.index.new_project')}
                         </Link>
                     </Button>
                 </div>
@@ -59,13 +57,17 @@ export default function ProjectsIndex({ projects }: Props) {
                                 <FolderKanban className="size-6 text-muted-foreground" />
                             </div>
                             <div className="space-y-1">
-                                <h2 className="font-medium">No projects yet</h2>
+                                <h2 className="font-medium">
+                                    {t('projects.index.empty_title')}
+                                </h2>
                                 <p className="text-sm text-muted-foreground">
-                                    Create your first project to get started.
+                                    {t('projects.index.empty_description')}
                                 </p>
                             </div>
                             <Button asChild>
-                                <Link href={create()}>Create project</Link>
+                                <Link href={create()}>
+                                    {t('projects.index.create_project')}
+                                </Link>
                             </Button>
                         </CardContent>
                     </Card>
@@ -83,7 +85,9 @@ export default function ProjectsIndex({ projects }: Props) {
                                                     : 'secondary'
                                             }
                                         >
-                                            {statusLabels[project.status]}
+                                            {t(
+                                                `projects.status.${project.status}`,
+                                            )}
                                         </Badge>
                                     </div>
                                     {project.description && (
@@ -97,13 +101,18 @@ export default function ProjectsIndex({ projects }: Props) {
                                         dateTime={project.created_at}
                                         className="text-sm text-muted-foreground"
                                     >
-                                        Created {formatDate(project.created_at)}
+                                        {t('projects.created_at', {
+                                            date: formatDate(
+                                                project.created_at,
+                                                locale,
+                                            ),
+                                        })}
                                     </time>
                                 </CardContent>
                                 <CardFooter>
                                     <Button variant="outline" asChild>
                                         <Link href={show(project.id)}>
-                                            Open project
+                                            {t('projects.index.open_project')}
                                             <ArrowRight />
                                         </Link>
                                     </Button>
@@ -117,11 +126,15 @@ export default function ProjectsIndex({ projects }: Props) {
     );
 }
 
-ProjectsIndex.layout = {
+ProjectsIndex.layout = ({
+    localization,
+}: {
+    localization: LocalizationData;
+}) => ({
     breadcrumbs: [
         {
-            title: 'Projects',
+            title: translate(localization.translations, 'navigation.projects'),
             href: index(),
         },
     ],
-};
+});

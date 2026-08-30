@@ -1,9 +1,13 @@
 <?php
 
+use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\ProjectController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
+
+Route::patch('locale', [LocaleController::class, 'update'])
+    ->name('locale.update');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'dashboard')->name('dashboard');

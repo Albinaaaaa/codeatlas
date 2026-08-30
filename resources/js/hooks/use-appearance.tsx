@@ -12,6 +12,9 @@ export type UseAppearanceReturn = {
 const listeners = new Set<() => void>();
 let currentAppearance: Appearance = 'system';
 
+const isAppearance = (value: string | null): value is Appearance =>
+    value === 'light' || value === 'dark' || value === 'system';
+
 const prefersDark = (): boolean => {
     if (typeof window === 'undefined') {
         return false;
@@ -26,7 +29,28 @@ const setCookie = (name: string, value: string, days = 365): void => {
     }
 
     const maxAge = days * 24 * 60 * 60;
-    document.cookie = `${name}=${value};path=/;max-age=${maxAge};SameSite=Lax`;
+    const secure = window.location.protocol === 'https:' ? ';Secure' : '';
+
+    document.cookie = `${name}=${encodeURIComponent(value)};path=/;max-age=${maxAge};SameSite=Lax${secure}`;
+};
+
+const getCookieAppearance = (): Appearance | null => {
+    if (typeof document === 'undefined') {
+        return null;
+    }
+
+    const appearanceCookie = document.cookie
+        .split('; ')
+        .find((cookie) => cookie.startsWith('appearance='))
+        ?.split('=')[1];
+
+    if (!appearanceCookie) {
+        return null;
+    }
+
+    const value = decodeURIComponent(appearanceCookie);
+
+    return isAppearance(value) ? value : null;
 };
 
 const getStoredAppearance = (): Appearance => {
@@ -34,7 +58,27 @@ const getStoredAppearance = (): Appearance => {
         return 'system';
     }
 
-    return (localStorage.getItem('appearance') as Appearance) || 'system';
+    try {
+        const storedAppearance = localStorage.getItem('appearance');
+
+        if (isAppearance(storedAppearance)) {
+            return storedAppearance;
+        }
+
+        return getCookieAppearance() ?? 'system';
+    } catch {
+        return getCookieAppearance() ?? 'system';
+    }
+};
+
+const storeAppearance = (appearance: Appearance): void => {
+    try {
+        localStorage.setItem('appearance', appearance);
+    } catch {
+        // The cookie remains available when localStorage is disabled.
+    }
+
+    setCookie('appearance', appearance);
 };
 
 const isDarkMode = (appearance: Appearance): boolean => {
@@ -75,12 +119,8 @@ export function initializeTheme(): void {
         return;
     }
 
-    if (!localStorage.getItem('appearance')) {
-        localStorage.setItem('appearance', 'system');
-        setCookie('appearance', 'system');
-    }
-
     currentAppearance = getStoredAppearance();
+    storeAppearance(currentAppearance);
     applyTheme(currentAppearance);
 
     // Set up system theme change listener
@@ -101,11 +141,7 @@ export function useAppearance(): UseAppearanceReturn {
     const updateAppearance = (mode: Appearance): void => {
         currentAppearance = mode;
 
-        // Store in localStorage for client-side persistence...
-        localStorage.setItem('appearance', mode);
-
-        // Store in cookie for SSR...
-        setCookie('appearance', mode);
+        storeAppearance(mode);
 
         applyTheme(mode);
         notify();
