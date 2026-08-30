@@ -24,6 +24,49 @@ class ProjectDatabaseFoundationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_all_foundation_tables_exist_and_project_owned_tables_are_scoped(): void
+    {
+        $foundationTables = [
+            'projects',
+            'project_profiles',
+            'project_settings',
+            'project_technologies',
+            'project_sources',
+            'local_project_sources',
+            'project_revisions',
+            'index_runs',
+            'index_run_steps',
+            'analysis_issues',
+            'code_files',
+            'code_symbols',
+            'code_symbol_roles',
+            'code_relations',
+            'laravel_routes',
+            'laravel_models',
+            'laravel_model_relations',
+            'database_tables',
+            'database_columns',
+            'database_foreign_keys',
+            'database_foreign_key_columns',
+            'database_indexes',
+            'database_index_columns',
+            'code_chunks',
+            'conversations',
+            'conversation_messages',
+            'message_sources',
+        ];
+
+        foreach ($foundationTables as $table) {
+            $this->assertTrue(Schema::hasTable($table), "Missing foundation table [$table].");
+        }
+
+        $this->assertTrue(Schema::hasColumn('projects', 'user_id'));
+
+        foreach (array_diff($foundationTables, ['projects']) as $table) {
+            $this->assertTrue(Schema::hasColumn($table, 'project_id'), "Table [$table] must be project-scoped.");
+        }
+    }
+
     public function test_a_project_belongs_to_its_owner(): void
     {
         $owner = User::factory()->create();
@@ -128,6 +171,24 @@ class ProjectDatabaseFoundationTest extends TestCase
             'project_id' => $firstProject->id,
             'project_revision_id' => $secondRevision->id,
             'status' => 'pending',
+        ]);
+    }
+
+    public function test_an_analysis_issue_cannot_reference_another_projects_revision(): void
+    {
+        $owner = User::factory()->create();
+        $firstProject = $this->createProject($owner, 'first-analysis-project');
+        $secondProject = $this->createProject($owner, 'second-analysis-project');
+        [, $secondRevision] = $this->createRevision($secondProject);
+
+        $this->expectException(QueryException::class);
+
+        DB::table('analysis_issues')->insert([
+            'project_id' => $firstProject->id,
+            'project_revision_id' => $secondRevision->id,
+            'severity' => 'warning',
+            'category' => 'architecture',
+            'title' => 'Cross-project issue',
         ]);
     }
 
@@ -253,6 +314,51 @@ class ProjectDatabaseFoundationTest extends TestCase
         $this->assertSame([1, 2], $positions);
         $this->assertTrue(Schema::hasTable('laravel_model_relations'));
         $this->assertTrue(Schema::hasTable('database_foreign_keys'));
+
+        $this->expectException(QueryException::class);
+
+        DB::table('database_foreign_key_columns')->insert([
+            'project_id' => $project->id,
+            'project_revision_id' => $revision->id,
+            'database_foreign_key_id' => $foreignKeyId,
+            'database_column_id' => $lineOrderId,
+            'referenced_database_column_id' => $orderId,
+            'ordinal_position' => 1,
+            'referenced_column_name' => 'id',
+        ]);
+    }
+
+    public function test_physical_foreign_key_columns_cannot_cross_project_boundaries(): void
+    {
+        $owner = User::factory()->create();
+        $firstProject = $this->createProject($owner, 'first-database-project');
+        $secondProject = $this->createProject($owner, 'second-database-project');
+        [, $firstRevision] = $this->createRevision($firstProject);
+        [, $secondRevision] = $this->createRevision($secondProject);
+        $firstTableId = $this->insertDatabaseTable($firstProject, $firstRevision, 'orders');
+        $secondTableId = $this->insertDatabaseTable($secondProject, $secondRevision, 'customers');
+        $firstColumnId = $this->insertDatabaseColumn($firstProject, $firstRevision, $firstTableId, 'customer_id', 1);
+        $secondColumnId = $this->insertDatabaseColumn($secondProject, $secondRevision, $secondTableId, 'id', 1);
+        $foreignKeyId = DB::table('database_foreign_keys')->insertGetId([
+            'project_id' => $firstProject->id,
+            'project_revision_id' => $firstRevision->id,
+            'database_table_id' => $firstTableId,
+            'name' => 'orders_customer_fk',
+            'referenced_schema_name' => 'public',
+            'referenced_table_name' => 'customers',
+        ]);
+
+        $this->expectException(QueryException::class);
+
+        DB::table('database_foreign_key_columns')->insert([
+            'project_id' => $firstProject->id,
+            'project_revision_id' => $firstRevision->id,
+            'database_foreign_key_id' => $foreignKeyId,
+            'database_column_id' => $firstColumnId,
+            'referenced_database_column_id' => $secondColumnId,
+            'ordinal_position' => 1,
+            'referenced_column_name' => 'id',
+        ]);
     }
 
     public function test_hard_deleting_a_project_cascades_through_project_owned_data(): void

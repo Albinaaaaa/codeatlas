@@ -56,7 +56,6 @@ AI is used only to retrieve, explain, summarize, and reason over verified projec
 ### AI
 
 - Ollama
-- OpenAI (optional)
 - qwen3-embedding
 
 ### Quality
