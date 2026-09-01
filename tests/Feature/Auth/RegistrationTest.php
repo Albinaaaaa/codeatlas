@@ -24,16 +24,24 @@ class RegistrationTest extends TestCase
         $response->assertOk();
     }
 
-    public function test_new_users_can_register()
+    public function test_new_users_can_register_and_open_the_authenticated_application()
     {
-        $response = $this->post(route('register.store'), [
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-            'password' => 'password',
-            'password_confirmation' => 'password',
-        ]);
+        $response = $this
+            ->withSession(['url.intended' => '/projects/999'])
+            ->post(route('register.store'), [
+                'name' => 'Test User',
+                'email' => 'test@example.com',
+                'password' => 'password',
+                'password_confirmation' => 'password',
+            ]);
 
-        $this->assertAuthenticated();
+        $response->assertSessionHasNoErrors();
         $response->assertRedirect(route('dashboard', absolute: false));
+        $response->assertSessionMissing('url.intended');
+        $this->assertDatabaseHas('users', ['email' => 'test@example.com']);
+        $this->assertAuthenticated();
+
+        $this->get(route('dashboard'))
+            ->assertOk();
     }
 }

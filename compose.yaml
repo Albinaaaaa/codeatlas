@@ -10,8 +10,20 @@ services:
         working_dir: /var/www/html
         env_file:
             - .env
+        environment:
+            APP_URL: ${CODEATLAS_DOCKER_APP_URL:-http://localhost:8080}
+            DB_HOST: postgres
+            REDIS_HOST: redis
+            OLLAMA_URL: http://ollama:11434
+            CODEATLAS_LOCAL_SOURCE_ROOT: /codeatlas/sources
         volumes:
             - .:/var/www/html
+            - type: bind
+              source: ${CODEATLAS_LOCAL_REPOS_PATH:?Set CODEATLAS_LOCAL_REPOS_PATH to a repository workspace}
+              target: /codeatlas/sources
+              read_only: true
+              bind:
+                  create_host_path: false
         depends_on:
             postgres:
                 condition: service_healthy
@@ -34,7 +46,10 @@ services:
             - codeatlas
 
     vite:
-        image: node:26-alpine
+        build:
+            context: .
+            dockerfile: Dockerfile
+            target: frontend
         restart: unless-stopped
         working_dir: /var/www/html
         command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
@@ -56,8 +71,20 @@ services:
         command: php artisan horizon
         env_file:
             - .env
+        environment:
+            APP_URL: ${CODEATLAS_DOCKER_APP_URL:-http://localhost:8080}
+            DB_HOST: postgres
+            REDIS_HOST: redis
+            OLLAMA_URL: http://ollama:11434
+            CODEATLAS_LOCAL_SOURCE_ROOT: /codeatlas/sources
         volumes:
             - .:/var/www/html
+            - type: bind
+              source: ${CODEATLAS_LOCAL_REPOS_PATH:?Set CODEATLAS_LOCAL_REPOS_PATH to a repository workspace}
+              target: /codeatlas/sources
+              read_only: true
+              bind:
+                  create_host_path: false
         depends_on:
             postgres:
                 condition: service_healthy
@@ -76,6 +103,11 @@ services:
         command: php artisan schedule:work
         env_file:
             - .env
+        environment:
+            APP_URL: ${CODEATLAS_DOCKER_APP_URL:-http://localhost:8080}
+            DB_HOST: postgres
+            REDIS_HOST: redis
+            OLLAMA_URL: http://ollama:11434
         volumes:
             - .:/var/www/html
         depends_on:

@@ -6,6 +6,7 @@ use App\Actions\Projects\CreateProject;
 use App\Http\Requests\StoreProjectRequest;
 use App\Models\Project;
 use App\Models\User;
+use App\ProjectSources\LocalDirectorySource;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -52,14 +53,40 @@ class ProjectController extends Controller
         return to_route('projects.show', $project);
     }
 
-    public function show(Project $project): Response
-    {
+    public function show(
+        Project $project,
+        LocalDirectorySource $localDirectory,
+    ): Response {
         Gate::authorize('view', $project);
 
         $project->loadExists('sources');
+        $localSourceEnabled = $localDirectory->isEnabled();
+        $source = $localSourceEnabled
+            ? $localDirectory->findFor($project)
+            : null;
 
         return Inertia::render('projects/show', [
-            'project' => $this->projectData($project),
+            'project' => [
+                ...$this->projectData($project),
+                'source' => $source?->local === null
+                    ? null
+                    : [
+                        'id' => $source->id,
+                        'type' => $source->type,
+                        'display_path' => $localDirectory->displayPath($source),
+                        'status' => $localDirectory->isAvailable($source)
+                            ? 'available'
+                            : 'unavailable',
+                    ],
+            ],
+            'sourceEndpoints' => $localSourceEnabled
+                ? [
+                    'directories' => route('projects.sources.local.directories', $project),
+                    'local' => route('projects.sources.local.update', $project),
+                ]
+                : null,
+            'localSourceEnabled' => $localSourceEnabled,
+            'localSourceConfigured' => $localDirectory->isConfigured(),
         ]);
     }
 

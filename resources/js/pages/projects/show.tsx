@@ -1,14 +1,24 @@
 import { Head, Link } from '@inertiajs/react';
 import { FolderOpen } from 'lucide-react';
+import LocalSourcePanel from '@/components/projects/local-source-panel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { translate, useTranslations } from '@/hooks/use-translations';
 import { index, show } from '@/routes/projects';
 import type { Locale, LocalizationData, ProjectSummary } from '@/types';
+import type {
+    LocalProjectSourceSummary,
+    ProjectSourceEndpoints,
+} from '@/types/local-project-source';
 
 type Props = {
-    project: ProjectSummary;
+    project: ProjectSummary & {
+        source: LocalProjectSourceSummary | null;
+    };
+    sourceEndpoints: ProjectSourceEndpoints | null;
+    localSourceEnabled: boolean;
+    localSourceConfigured: boolean;
 };
 
 function formatDate(date: string, locale: Locale): string {
@@ -17,7 +27,12 @@ function formatDate(date: string, locale: Locale): string {
     }).format(new Date(date));
 }
 
-export default function ProjectsShow({ project }: Props) {
+export default function ProjectsShow({
+    project,
+    sourceEndpoints,
+    localSourceEnabled,
+    localSourceConfigured,
+}: Props) {
     const { locale, t } = useTranslations();
 
     return (
@@ -61,21 +76,31 @@ export default function ProjectsShow({ project }: Props) {
                     </Button>
                 </div>
 
-                <Card className="min-h-64 items-center justify-center text-center">
-                    <CardContent className="flex flex-col items-center gap-3">
-                        <div className="rounded-full bg-muted p-3">
-                            <FolderOpen className="size-6 text-muted-foreground" />
-                        </div>
-                        <div className="space-y-1">
-                            <h2 className="font-medium">
-                                {t('projects.show.empty_title')}
-                            </h2>
-                            <p className="text-sm text-muted-foreground">
-                                {t('projects.show.empty_description')}
-                            </p>
-                        </div>
-                    </CardContent>
-                </Card>
+                {localSourceEnabled && sourceEndpoints ? (
+                    <LocalSourcePanel
+                        configured={localSourceConfigured}
+                        endpoints={sourceEndpoints}
+                        source={project.source}
+                    />
+                ) : (
+                    <Card className="min-h-64 items-center justify-center text-center">
+                        <CardContent className="flex max-w-xl flex-col items-center gap-4">
+                            <div className="rounded-full bg-muted p-3">
+                                <FolderOpen className="size-6 text-muted-foreground" />
+                            </div>
+                            <div className="space-y-1">
+                                <h2 className="font-medium">
+                                    {t('projects.show.empty_title')}
+                                </h2>
+                                <p className="text-sm text-muted-foreground">
+                                    {t(
+                                        'projects.show.no_sources_enabled_description',
+                                    )}
+                                </p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
             </div>
         </>
     );
