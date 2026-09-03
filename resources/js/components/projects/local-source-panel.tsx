@@ -6,6 +6,7 @@ import {
     FolderOpen,
     HardDrive,
     LoaderCircle,
+    ScanSearch,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import InputError from '@/components/input-error';
@@ -26,6 +27,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import type {
     LocalProjectSourceSummary,
     ProjectSourceEndpoints,
+    RepositoryScanSummary,
 } from '@/types/local-project-source';
 
 type DirectoryEntry = {
@@ -133,6 +135,12 @@ export default function LocalSourcePanel({
                             </p>
                         )}
 
+                        <RepositoryScanPanel
+                            endpoint={endpoints.scan}
+                            scan={source.scan}
+                            sourceAvailable={source.status === 'available'}
+                        />
+
                         <div className="flex flex-wrap gap-3">
                             <Dialog
                                 open={configured && connectOpen}
@@ -183,6 +191,108 @@ export default function LocalSourcePanel({
                 </Card>
             )}
         </>
+    );
+}
+
+function RepositoryScanPanel({
+    endpoint,
+    scan,
+    sourceAvailable,
+}: {
+    endpoint: string;
+    scan: RepositoryScanSummary | null;
+    sourceAvailable: boolean;
+}) {
+    const { locale, t } = useTranslations();
+    const completedAt = scan?.completed_at
+        ? new Intl.DateTimeFormat(locale === 'uk' ? 'uk-UA' : 'en-US', {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+          }).format(new Date(scan.completed_at))
+        : null;
+
+    return (
+        <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
+            <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
+                <div className="space-y-1">
+                    <h3 className="text-sm font-medium">
+                        {t('projects.scan.title')}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                        {t('projects.scan.description')}
+                    </p>
+                </div>
+                {scan && (
+                    <Badge
+                        variant={
+                            scan.status === 'completed'
+                                ? 'default'
+                                : 'secondary'
+                        }
+                    >
+                        {t(`projects.scan.status.${scan.status}`)}
+                    </Badge>
+                )}
+            </div>
+
+            {scan ? (
+                <dl className="grid gap-3 text-sm sm:grid-cols-[10rem_1fr]">
+                    <dt className="font-medium">
+                        {t('projects.scan.revision')}
+                    </dt>
+                    <dd className="min-w-0 font-mono break-all text-muted-foreground">
+                        {scan.revision}
+                    </dd>
+                    <dt className="font-medium">{t('projects.scan.files')}</dt>
+                    <dd className="text-muted-foreground">
+                        {scan.files_count}
+                    </dd>
+                    <dt className="font-medium">{t('projects.scan.issues')}</dt>
+                    <dd className="text-muted-foreground">
+                        {scan.issues_count}
+                    </dd>
+                    {completedAt && (
+                        <>
+                            <dt className="font-medium">
+                                {t('projects.scan.completed_at')}
+                            </dt>
+                            <dd className="text-muted-foreground">
+                                {completedAt}
+                            </dd>
+                        </>
+                    )}
+                </dl>
+            ) : (
+                <p className="text-sm text-muted-foreground">
+                    {t('projects.scan.not_scanned')}
+                </p>
+            )}
+
+            <Form
+                action={endpoint}
+                method="post"
+                options={{ preserveScroll: true }}
+            >
+                {({ processing, errors }) => (
+                    <div className="space-y-2">
+                        <Button
+                            type="submit"
+                            disabled={!sourceAvailable || processing}
+                        >
+                            {processing ? (
+                                <LoaderCircle className="animate-spin" />
+                            ) : (
+                                <ScanSearch />
+                            )}
+                            {processing
+                                ? t('projects.scan.scanning')
+                                : t('projects.scan.action')}
+                        </Button>
+                        <InputError message={errors.scan} />
+                    </div>
+                )}
+            </Form>
+        </div>
     );
 }
 

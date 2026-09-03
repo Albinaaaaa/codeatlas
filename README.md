@@ -41,7 +41,7 @@ AI is used only to retrieve, explain, summarize, and reason over verified projec
 - PostgreSQL
 - pgvector
 - Redis
-- Laravel Horizon
+- Laravel queues
 - nikic/PHP-Parser
 - Laravel AI SDK
 
@@ -92,7 +92,12 @@ Then start the development stack:
 docker compose up -d
 ```
 
-Compose mounts this workspace read-only into both `app` and `horizon`, the
+Repository scans run on the queue so large repositories do not hold an HTTP
+request open. Docker Compose starts the `queue` service automatically. Native
+self-hosted installations must keep a worker running with
+`php artisan queue:work --sleep=1 --tries=1 --timeout=900`.
+
+Compose mounts this workspace read-only into both `app` and `queue`, the
 processes that may read repository files. The picker never browses outside this
 workspace, and CodeAtlas stores paths relative to it (for example `project-a`)
 rather than storing host or container-specific absolute paths. Docker cannot

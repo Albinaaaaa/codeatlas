@@ -4,18 +4,21 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class IndexRun extends Model
+class AnalysisIssue extends Model
 {
     /** @var list<string> */
     protected $fillable = [
-        'status',
-        'trigger',
-        'started_at',
-        'completed_at',
-        'failure_reason',
-        'statistics',
+        'severity',
+        'category',
+        'code',
+        'title',
+        'description',
+        'source_path',
+        'start_line',
+        'end_line',
+        'metadata',
+        'resolved_at',
     ];
 
     /** @return BelongsTo<Project, $this> */
@@ -30,25 +33,24 @@ class IndexRun extends Model
         return $this->belongsTo(ProjectRevision::class, 'project_revision_id');
     }
 
-    /** @return HasMany<IndexRunStep, $this> */
-    public function steps(): HasMany
+    /** @return BelongsTo<IndexRun, $this> */
+    public function run(): BelongsTo
     {
-        return $this->hasMany(IndexRunStep::class);
+        return $this->belongsTo(IndexRun::class, 'index_run_id');
     }
 
-    /** @return HasMany<AnalysisIssue, $this> */
-    public function analysisIssues(): HasMany
+    /** @return BelongsTo<CodeFile, $this> */
+    public function codeFile(): BelongsTo
     {
-        return $this->hasMany(AnalysisIssue::class);
+        return $this->belongsTo(CodeFile::class);
     }
 
     /** @return array<string, string> */
     protected function casts(): array
     {
         return [
-            'started_at' => 'datetime',
-            'completed_at' => 'datetime',
-            'statistics' => 'array',
+            'metadata' => 'array',
+            'resolved_at' => 'datetime',
         ];
     }
 }

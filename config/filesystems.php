@@ -38,6 +38,15 @@ return [
             'report' => false,
         ],
 
+        'repository_snapshots' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/repository-snapshots'),
+            'serve' => false,
+            'visibility' => 'private',
+            'throw' => true,
+            'report' => true,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

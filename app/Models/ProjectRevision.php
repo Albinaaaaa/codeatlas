@@ -38,6 +38,18 @@ class ProjectRevision extends Model
         return $this->hasMany(IndexRun::class);
     }
 
+    /** @return HasMany<CodeFile, $this> */
+    public function codeFiles(): HasMany
+    {
+        return $this->hasMany(CodeFile::class);
+    }
+
+    /** @return HasMany<AnalysisIssue, $this> */
+    public function analysisIssues(): HasMany
+    {
+        return $this->hasMany(AnalysisIssue::class);
+    }
+
     /** @return array<string, string> */
     protected function casts(): array
     {

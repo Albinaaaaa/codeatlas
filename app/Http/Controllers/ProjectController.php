@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Actions\Projects\CreateProject;
 use App\Http\Requests\StoreProjectRequest;
+use App\Models\IndexRun;
 use App\Models\Project;
 use App\Models\User;
 use App\ProjectSources\LocalDirectorySource;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -64,6 +66,16 @@ class ProjectController extends Controller
         $source = $localSourceEnabled
             ? $localDirectory->findFor($project)
             : null;
+        $latestRun = $source === null
+            ? null
+            : $project->indexRuns()
+                ->whereHas(
+                    'revision',
+                    fn ($query) => $query->where('project_source_id', $source->id),
+                )
+                ->with('revision')
+                ->latest('id')
+                ->first();
 
         return Inertia::render('projects/show', [
             'project' => [
@@ -77,12 +89,16 @@ class ProjectController extends Controller
                         'status' => $localDirectory->isAvailable($source)
                             ? 'available'
                             : 'unavailable',
+                        'scan' => $latestRun === null
+                            ? null
+                            : $this->scanData($latestRun),
                     ],
             ],
             'sourceEndpoints' => $localSourceEnabled
                 ? [
                     'directories' => route('projects.sources.local.directories', $project),
                     'local' => route('projects.sources.local.update', $project),
+                    'scan' => route('projects.scan', $project),
                 ]
                 : null,
             'localSourceEnabled' => $localSourceEnabled,
@@ -111,6 +127,34 @@ class ProjectController extends Controller
                 ? 'connected'
                 : 'not_connected',
             'created_at' => $project->created_at?->toISOString() ?? '',
+        ];
+    }
+
+    /**
+     * @return array{
+     *     status: string,
+     *     revision: string,
+     *     files_count: int,
+     *     issues_count: int,
+     *     completed_at: string|null,
+     *     failure_reason: string|null
+     * }
+     */
+    private function scanData(IndexRun $run): array
+    {
+        $statisticsValue = $run->getAttribute('statistics');
+        $statistics = is_array($statisticsValue) ? $statisticsValue : [];
+        $completedAt = $run->getAttribute('completed_at');
+
+        return [
+            'status' => $run->status,
+            'revision' => $run->revision->identifier,
+            'files_count' => (int) ($statistics['files_discovered'] ?? 0),
+            'issues_count' => (int) ($statistics['issues_count'] ?? 0),
+            'completed_at' => $completedAt instanceof Carbon
+                ? $completedAt->toISOString()
+                : null,
+            'failure_reason' => $run->failure_reason,
         ];
     }
 }

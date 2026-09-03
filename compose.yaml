@@ -61,14 +61,14 @@ services:
         networks:
             - codeatlas
 
-    horizon:
+    queue:
         build:
             context: .
             dockerfile: Dockerfile
             target: development
         restart: unless-stopped
         working_dir: /var/www/html
-        command: php artisan horizon
+        command: php artisan queue:work --sleep=1 --tries=1 --timeout=900
         env_file:
             - .env
         environment:
