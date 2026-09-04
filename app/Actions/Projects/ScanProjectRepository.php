@@ -7,6 +7,7 @@ use App\Models\IndexRun;
 use App\Models\IndexRunStep;
 use App\Models\Project;
 use App\Models\ProjectSource;
+use App\PhpAnalysis\PhpRevisionAnalyzer;
 use App\ProjectSources\LocalDirectorySource;
 use App\ProjectSources\PrepareLocalDirectoryRevision;
 use App\RepositoryScanning\Exceptions\RepositoryScanException;
@@ -20,6 +21,7 @@ final class ScanProjectRepository
         private readonly LocalDirectorySource $localDirectory,
         private readonly PrepareLocalDirectoryRevision $prepareLocalDirectory,
         private readonly RepositoryInventoryScanner $scanner,
+        private readonly PhpRevisionAnalyzer $phpAnalyzer,
     ) {}
 
     public function assertSourceAvailable(Project $project): void
@@ -63,6 +65,11 @@ final class ScanProjectRepository
             }
 
             $statistics = $this->scanner->scan($snapshot);
+            $phpAnalysis = $this->phpAnalyzer->analyze(
+                $snapshot->revision,
+                $snapshot->rootPath,
+                $run,
+            );
             $completedAt = now();
             $step->update([
                 'status' => 'completed',
@@ -70,6 +77,9 @@ final class ScanProjectRepository
                 'records_processed' => $statistics['file_count'],
                 'metadata' => [
                     'size_bytes' => $statistics['size_bytes'],
+                    'php_files_analyzed' => $phpAnalysis->filesAnalyzed,
+                    'php_symbols' => $phpAnalysis->symbolsPersisted,
+                    'php_relations' => $phpAnalysis->relationsPersisted,
                 ],
             ]);
             $run->update([
@@ -78,7 +88,10 @@ final class ScanProjectRepository
                 'statistics' => [
                     'files_discovered' => $statistics['file_count'],
                     'size_bytes' => $statistics['size_bytes'],
-                    'issues_count' => count($snapshot->issues),
+                    'issues_count' => count($snapshot->issues) + $phpAnalysis->issuesPersisted,
+                    'php_files_analyzed' => $phpAnalysis->filesAnalyzed,
+                    'php_symbols' => $phpAnalysis->symbolsPersisted,
+                    'php_relations' => $phpAnalysis->relationsPersisted,
                     'snapshot_fingerprint' => $snapshot->fingerprint,
                     'revision_created' => $snapshot->revisionCreated,
                 ],
