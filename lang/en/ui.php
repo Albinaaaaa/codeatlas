@@ -125,6 +125,17 @@ return [
                 'failed' => 'Failed',
             ],
         ],
+        'routes' => [
+            'title' => 'Routes',
+            'description' => 'Laravel routes detected statically in the latest repository revision.',
+            'empty' => 'No statically resolvable Laravel routes were found.',
+            'method' => 'Method',
+            'uri' => 'URI',
+            'name' => 'Name',
+            'controller' => 'Controller',
+            'middleware' => 'Middleware',
+            'source' => 'Source',
+        ],
         'show' => [
             'back' => 'Back to projects',
             'empty_title' => 'No source connected yet.',

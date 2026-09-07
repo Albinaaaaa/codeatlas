@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { translate, useTranslations } from '@/hooks/use-translations';
 import { index, show } from '@/routes/projects';
 import type { Locale, LocalizationData, ProjectSummary } from '@/types';
+import type { LaravelRouteSummary } from '@/types/laravel-route';
 import type {
     LocalProjectSourceSummary,
     ProjectSourceEndpoints,
@@ -19,6 +20,7 @@ type Props = {
     sourceEndpoints: ProjectSourceEndpoints | null;
     localSourceEnabled: boolean;
     localSourceConfigured: boolean;
+    routes: LaravelRouteSummary[];
 };
 
 function formatDate(date: string, locale: Locale): string {
@@ -32,6 +34,7 @@ export default function ProjectsShow({
     sourceEndpoints,
     localSourceEnabled,
     localSourceConfigured,
+    routes,
 }: Props) {
     const { locale, t } = useTranslations();
 
@@ -101,6 +104,84 @@ export default function ProjectsShow({
                         </CardContent>
                     </Card>
                 )}
+
+                <Card>
+                    <CardContent className="space-y-4 pt-6">
+                        <div>
+                            <h2 className="font-medium">
+                                {t('projects.routes.title')}
+                            </h2>
+                            <p className="text-sm text-muted-foreground">
+                                {t('projects.routes.description')}
+                            </p>
+                        </div>
+
+                        {routes.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                                {t('projects.routes.empty')}
+                            </p>
+                        ) : (
+                            <div className="overflow-x-auto rounded-md border">
+                                <table className="w-full text-left text-sm">
+                                    <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
+                                        <tr>
+                                            {[
+                                                'method',
+                                                'uri',
+                                                'name',
+                                                'controller',
+                                                'middleware',
+                                                'source',
+                                            ].map((column) => (
+                                                <th
+                                                    key={column}
+                                                    className="px-3 py-2 font-medium"
+                                                >
+                                                    {t(
+                                                        `projects.routes.${column}`,
+                                                    )}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                        {routes.map((route) => (
+                                            <tr key={route.id}>
+                                                <td className="px-3 py-2 align-top">
+                                                    <Badge variant="outline">
+                                                        {route.method}
+                                                    </Badge>
+                                                </td>
+                                                <td className="px-3 py-2 align-top font-mono text-xs">
+                                                    {route.uri}
+                                                </td>
+                                                <td className="px-3 py-2 align-top">
+                                                    {route.name ?? '—'}
+                                                </td>
+                                                <td className="px-3 py-2 align-top font-mono text-xs">
+                                                    {route.controller ?? '—'}
+                                                </td>
+                                                <td className="px-3 py-2 align-top">
+                                                    {route.middleware.length > 0
+                                                        ? route.middleware.join(
+                                                              ', ',
+                                                          )
+                                                        : '—'}
+                                                </td>
+                                                <td className="px-3 py-2 align-top font-mono text-xs whitespace-nowrap">
+                                                    {route.source_path}
+                                                    {route.start_line !==
+                                                        null &&
+                                                        `:${route.start_line}`}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
             </div>
         </>
     );

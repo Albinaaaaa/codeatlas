@@ -8,6 +8,7 @@ final readonly class PhpRevisionAnalysis
         public int $filesAnalyzed,
         public int $symbolsPersisted,
         public int $relationsPersisted,
+        public int $routesPersisted,
         public int $issuesPersisted,
     ) {}
 }

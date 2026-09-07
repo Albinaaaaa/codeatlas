@@ -59,6 +59,8 @@ final class PhpRevisionAnalyzer
                         code: 'php.unreadable_file',
                         title: 'PHP file could not be read from the revision snapshot',
                     )],
+                    routes: [],
+                    routeIssues: [],
                 );
 
                 continue;
@@ -75,7 +77,11 @@ final class PhpRevisionAnalyzer
             DB::table('analysis_issues')
                 ->where('project_id', $projectId)
                 ->where('project_revision_id', $revisionId)
-                ->where('category', 'php_ast')
+                ->whereIn('category', ['php_ast', 'laravel_route'])
+                ->delete();
+            DB::table('laravel_routes')
+                ->where('project_id', $projectId)
+                ->where('project_revision_id', $revisionId)
                 ->delete();
             DB::table('code_relations')
                 ->where('project_id', $projectId)
@@ -92,6 +98,7 @@ final class PhpRevisionAnalyzer
             $qualifiedSymbolIds = [];
             $symbolCount = 0;
             $relationCount = 0;
+            $routeCount = 0;
             $issueCount = 0;
 
             foreach ($analyses as $analysis) {
@@ -138,6 +145,39 @@ final class PhpRevisionAnalyzer
                     $relationCount++;
                 }
 
+                foreach ($analysis->routes as $route) {
+                    $controllerSymbolId = $route->controller === null
+                        ? null
+                        : ($qualifiedSymbolIds[$route->controller] ?? null);
+                    $methodSymbolId = $route->controller === null || $route->controllerMethod === null
+                        ? null
+                        : ($qualifiedSymbolIds[$route->controller.'::'.$route->controllerMethod] ?? null);
+                    $action = $route->controller === null
+                        ? 'Closure'
+                        : $route->controller.($route->controllerMethod === null ? '' : '@'.$route->controllerMethod);
+
+                    DB::table('laravel_routes')->insert([
+                        'project_id' => $projectId,
+                        'project_revision_id' => $revisionId,
+                        'code_file_id' => $analysis->file->codeFileId,
+                        'controller_symbol_id' => $controllerSymbolId,
+                        'method' => $route->method,
+                        'uri' => $route->uri,
+                        'name' => $route->name,
+                        'action' => $action,
+                        'middleware' => json_encode($route->middleware, JSON_THROW_ON_ERROR),
+                        'start_line' => $route->startLine,
+                        'end_line' => $route->endLine,
+                        'metadata' => json_encode([
+                            'controller_method' => $route->controllerMethod,
+                            'controller_method_symbol_id' => $methodSymbolId,
+                        ], JSON_THROW_ON_ERROR),
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]);
+                    $routeCount++;
+                }
+
                 foreach ($analysis->issues as $issue) {
                     DB::table('analysis_issues')->insert([
                         'project_id' => $projectId,
@@ -157,12 +197,33 @@ final class PhpRevisionAnalyzer
                     ]);
                     $issueCount++;
                 }
+
+                foreach ($analysis->routeIssues as $issue) {
+                    DB::table('analysis_issues')->insert([
+                        'project_id' => $projectId,
+                        'project_revision_id' => $revisionId,
+                        'index_run_id' => $run?->id,
+                        'code_file_id' => $analysis->file->codeFileId,
+                        'severity' => $issue->severity,
+                        'category' => 'laravel_route',
+                        'code' => $issue->code,
+                        'title' => $issue->title,
+                        'description' => $issue->description,
+                        'source_path' => $analysis->file->path,
+                        'start_line' => $issue->startLine,
+                        'end_line' => $issue->endLine,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]);
+                    $issueCount++;
+                }
             }
 
             return new PhpRevisionAnalysis(
                 filesAnalyzed: count($analyses),
                 symbolsPersisted: $symbolCount,
                 relationsPersisted: $relationCount,
+                routesPersisted: $routeCount,
                 issuesPersisted: $issueCount,
             );
         });

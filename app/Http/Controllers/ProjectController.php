@@ -11,6 +11,7 @@ use App\ProjectSources\LocalDirectorySource;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -103,6 +104,7 @@ class ProjectController extends Controller
                 : null,
             'localSourceEnabled' => $localSourceEnabled,
             'localSourceConfigured' => $localDirectory->isConfigured(),
+            'routes' => $this->routesFor($project),
         ]);
     }
 
@@ -156,5 +158,70 @@ class ProjectController extends Controller
                 : null,
             'failure_reason' => $run->failure_reason,
         ];
+    }
+
+    /**
+     * @return list<array{
+     *     id: int,
+     *     method: string,
+     *     uri: string,
+     *     name: string|null,
+     *     controller: string|null,
+     *     middleware: list<string>,
+     *     source_path: string,
+     *     start_line: int|null,
+     *     end_line: int|null
+     * }>
+     */
+    private function routesFor(Project $project): array
+    {
+        $revisionId = $project->revisions()->max('id');
+
+        if ($revisionId === null) {
+            return [];
+        }
+
+        return DB::table('laravel_routes')
+            ->join('code_files', function ($join): void {
+                $join->on('code_files.project_id', '=', 'laravel_routes.project_id')
+                    ->on('code_files.project_revision_id', '=', 'laravel_routes.project_revision_id')
+                    ->on('code_files.id', '=', 'laravel_routes.code_file_id');
+            })
+            ->where('laravel_routes.project_id', $project->id)
+            ->where('laravel_routes.project_revision_id', $revisionId)
+            ->orderBy('laravel_routes.uri')
+            ->orderBy('laravel_routes.method')
+            ->select([
+                'laravel_routes.id',
+                'laravel_routes.method',
+                'laravel_routes.uri',
+                'laravel_routes.name',
+                'laravel_routes.action',
+                'laravel_routes.middleware',
+                'laravel_routes.start_line',
+                'laravel_routes.end_line',
+                'code_files.path as source_path',
+            ])
+            ->get()
+            ->map(function (object $route): array {
+                $middleware = is_string($route->middleware)
+                    ? json_decode($route->middleware, true)
+                    : $route->middleware;
+
+                return [
+                    'id' => (int) $route->id,
+                    'method' => (string) $route->method,
+                    'uri' => (string) $route->uri,
+                    'name' => is_string($route->name) ? $route->name : null,
+                    'controller' => $route->action === 'Closure' ? null : (string) $route->action,
+                    'middleware' => is_array($middleware)
+                        ? array_values(array_filter($middleware, is_string(...)))
+                        : [],
+                    'source_path' => (string) $route->source_path,
+                    'start_line' => $route->start_line === null ? null : (int) $route->start_line,
+                    'end_line' => $route->end_line === null ? null : (int) $route->end_line,
+                ];
+            })
+            ->all();
     }
 }

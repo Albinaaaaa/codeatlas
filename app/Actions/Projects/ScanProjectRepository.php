@@ -80,6 +80,7 @@ final class ScanProjectRepository
                     'php_files_analyzed' => $phpAnalysis->filesAnalyzed,
                     'php_symbols' => $phpAnalysis->symbolsPersisted,
                     'php_relations' => $phpAnalysis->relationsPersisted,
+                    'laravel_routes' => $phpAnalysis->routesPersisted,
                 ],
             ]);
             $run->update([
@@ -92,6 +93,7 @@ final class ScanProjectRepository
                     'php_files_analyzed' => $phpAnalysis->filesAnalyzed,
                     'php_symbols' => $phpAnalysis->symbolsPersisted,
                     'php_relations' => $phpAnalysis->relationsPersisted,
+                    'laravel_routes' => $phpAnalysis->routesPersisted,
                     'snapshot_fingerprint' => $snapshot->fingerprint,
                     'revision_created' => $snapshot->revisionCreated,
                 ],

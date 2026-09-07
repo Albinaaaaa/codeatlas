@@ -3,8 +3,10 @@
 namespace Tests\Feature\Projects;
 
 use App\Models\Project;
+use App\Models\ProjectRevision;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -97,6 +99,52 @@ class ProjectManagementTest extends TestCase
                 ->where('project.id', $project->id)
                 ->where('project.name', 'CodeAtlas')
                 ->where('project.status', 'not_connected'),
+            );
+    }
+
+    public function test_project_page_shows_routes_from_the_latest_revision(): void
+    {
+        $user = User::factory()->create();
+        $project = $this->createProject($user, 'Routes project');
+        $source = $project->sources()->create([
+            'type' => 'local',
+            'name' => 'Route source',
+        ]);
+        $revision = new ProjectRevision(['identifier' => 'routes-revision']);
+        $revision->project()->associate($project);
+        $source->revisions()->save($revision);
+        $fileId = DB::table('code_files')->insertGetId([
+            'project_id' => $project->id,
+            'project_revision_id' => $revision->id,
+            'path' => 'routes/web.php',
+            'language' => 'PHP',
+            'content_hash' => hash('sha256', 'routes'),
+        ]);
+        DB::table('laravel_routes')->insert([
+            'project_id' => $project->id,
+            'project_revision_id' => $revision->id,
+            'code_file_id' => $fileId,
+            'method' => 'GET',
+            'uri' => 'users',
+            'name' => 'users.index',
+            'action' => 'App\\Http\\Controllers\\UserController@index',
+            'middleware' => json_encode(['auth']),
+            'start_line' => 12,
+            'end_line' => 14,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('projects.show', $project))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('routes', 1)
+                ->where('routes.0.method', 'GET')
+                ->where('routes.0.uri', 'users')
+                ->where('routes.0.name', 'users.index')
+                ->where('routes.0.controller', 'App\\Http\\Controllers\\UserController@index')
+                ->where('routes.0.middleware', ['auth'])
+                ->where('routes.0.source_path', 'routes/web.php')
+                ->where('routes.0.start_line', 12),
             );
     }
 

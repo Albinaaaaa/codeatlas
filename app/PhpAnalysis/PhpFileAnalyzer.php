@@ -2,6 +2,7 @@
 
 namespace App\PhpAnalysis;
 
+use App\LaravelAnalysis\LaravelRouteAnalyzer;
 use PhpParser\Error;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
@@ -12,8 +13,9 @@ final class PhpFileAnalyzer
 {
     private readonly Parser $parser;
 
-    public function __construct()
-    {
+    public function __construct(
+        private readonly LaravelRouteAnalyzer $routeAnalyzer,
+    ) {
         $this->parser = (new ParserFactory)->createForNewestSupportedVersion();
     }
 
@@ -28,12 +30,15 @@ final class PhpFileAnalyzer
             $analysisTraverser = new NodeTraverser;
             $analysisTraverser->addVisitor($visitor);
             $analysisTraverser->traverse($statements);
+            $routeAnalysis = $this->routeAnalyzer->analyze($file, $statements);
 
             return new PhpFileAnalysis(
                 file: $file,
                 symbols: $visitor->symbols(),
                 relations: $visitor->relations(),
                 issues: $visitor->issues(),
+                routes: $routeAnalysis->routes,
+                routeIssues: $routeAnalysis->issues,
             );
         } catch (Error $error) {
             $line = max(1, $error->getStartLine());
@@ -49,6 +54,8 @@ final class PhpFileAnalyzer
                     startLine: $line,
                     endLine: $line,
                 )],
+                routes: [],
+                routeIssues: [],
             );
         }
     }
