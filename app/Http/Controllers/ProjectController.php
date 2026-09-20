@@ -105,6 +105,7 @@ class ProjectController extends Controller
             'localSourceEnabled' => $localSourceEnabled,
             'localSourceConfigured' => $localDirectory->isConfigured(),
             'routes' => $this->routesFor($project),
+            'models' => $this->modelsFor($project),
         ]);
     }
 
@@ -158,6 +159,73 @@ class ProjectController extends Controller
                 : null,
             'failure_reason' => $run->failure_reason,
         ];
+    }
+
+    /**
+     * @return list<array{
+     *   id: int, code_symbol_id: int, class: string, table_name: string|null,
+     *   connection: string|null, source_path: string, start_line: int|null, end_line: int|null,
+     *   configuration: array<string, mixed>, relations: list<array<string, mixed>>
+     * }>
+     */
+    private function modelsFor(Project $project): array
+    {
+        $revisionId = $project->revisions()->max('id');
+        if ($revisionId === null) {
+            return [];
+        }
+
+        $relations = DB::table('laravel_model_relations as relations')
+            ->join('code_files as files', 'files.id', '=', 'relations.code_file_id')
+            ->where('relations.project_id', $project->id)
+            ->where('relations.project_revision_id', $revisionId)
+            ->orderBy('relations.name')
+            ->select('relations.*', 'files.path as source_path')
+            ->get()
+            ->groupBy('laravel_model_id');
+
+        return DB::table('laravel_models as models')
+            ->join('code_symbols as symbols', 'symbols.id', '=', 'models.code_symbol_id')
+            ->join('code_files as files', 'files.id', '=', 'symbols.code_file_id')
+            ->where('models.project_id', $project->id)
+            ->where('models.project_revision_id', $revisionId)
+            ->orderBy('symbols.qualified_name')
+            ->select('models.*', 'symbols.qualified_name', 'symbols.start_line', 'symbols.end_line', 'files.path as source_path')
+            ->get()
+            ->map(function (object $model) use ($relations): array {
+                $metadata = json_decode((string) $model->metadata, true, flags: JSON_THROW_ON_ERROR);
+
+                return [
+                    'id' => (int) $model->id,
+                    'code_symbol_id' => (int) $model->code_symbol_id,
+                    'class' => (string) $model->qualified_name,
+                    'table_name' => is_string($model->table_name) ? $model->table_name : null,
+                    'connection' => is_string($model->connection) ? $model->connection : null,
+                    'source_path' => (string) $model->source_path,
+                    'start_line' => $model->start_line === null ? null : (int) $model->start_line,
+                    'end_line' => $model->end_line === null ? null : (int) $model->end_line,
+                    'configuration' => $metadata['configuration'] ?? [],
+                    'relations' => ($relations->get($model->id) ?? collect())
+                        ->map(function (object $relation): array {
+                            $metadata = json_decode((string) $relation->metadata, true, flags: JSON_THROW_ON_ERROR);
+
+                            return [
+                                'id' => (int) $relation->id,
+                                'name' => (string) $relation->name,
+                                'relation_type' => (string) $relation->relation_type,
+                                'related_model' => (string) $relation->related_model,
+                                'related_laravel_model_id' => $relation->related_laravel_model_id === null ? null : (int) $relation->related_laravel_model_id,
+                                'foreign_key' => $relation->foreign_key,
+                                'local_key' => $relation->local_key,
+                                'pivot_table' => $relation->pivot_table,
+                                'source_path' => (string) $relation->source_path,
+                                'start_line' => $relation->start_line === null ? null : (int) $relation->start_line,
+                                'end_line' => $relation->end_line === null ? null : (int) $relation->end_line,
+                                'arguments' => $metadata['arguments'] ?? [],
+                            ];
+                        })->values()->all(),
+                ];
+            })->all();
     }
 
     /**

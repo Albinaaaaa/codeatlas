@@ -81,6 +81,8 @@ final class ScanProjectRepository
                     'php_symbols' => $phpAnalysis->symbolsPersisted,
                     'php_relations' => $phpAnalysis->relationsPersisted,
                     'laravel_routes' => $phpAnalysis->routesPersisted,
+                    'laravel_models' => $phpAnalysis->modelsPersisted,
+                    'laravel_model_relations' => $phpAnalysis->modelRelationsPersisted,
                 ],
             ]);
             $run->update([
@@ -95,6 +97,8 @@ final class ScanProjectRepository
                     'php_relations' => $phpAnalysis->relationsPersisted,
                     'laravel_routes' => $phpAnalysis->routesPersisted,
                     'snapshot_fingerprint' => $snapshot->fingerprint,
+                    'laravel_models' => $phpAnalysis->modelsPersisted,
+                    'laravel_model_relations' => $phpAnalysis->modelRelationsPersisted,
                     'revision_created' => $snapshot->revisionCreated,
                 ],
             ]);

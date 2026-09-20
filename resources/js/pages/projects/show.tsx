@@ -1,6 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
 import { FolderOpen } from 'lucide-react';
 import LocalSourcePanel from '@/components/projects/local-source-panel';
+import ModelsPanel from '@/components/projects/models-panel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,6 +9,7 @@ import { translate, useTranslations } from '@/hooks/use-translations';
 import { index, show } from '@/routes/projects';
 import type { Locale, LocalizationData, ProjectSummary } from '@/types';
 import type { LaravelRouteSummary } from '@/types/laravel-route';
+import type { LaravelModelSummary } from '@/types/laravel-model';
 import type {
     LocalProjectSourceSummary,
     ProjectSourceEndpoints,
@@ -21,6 +23,7 @@ type Props = {
     localSourceEnabled: boolean;
     localSourceConfigured: boolean;
     routes: LaravelRouteSummary[];
+    models: LaravelModelSummary[];
 };
 
 function formatDate(date: string, locale: Locale): string {
@@ -35,6 +38,7 @@ export default function ProjectsShow({
     localSourceEnabled,
     localSourceConfigured,
     routes,
+    models,
 }: Props) {
     const { locale, t } = useTranslations();
 
@@ -104,6 +108,8 @@ export default function ProjectsShow({
                         </CardContent>
                     </Card>
                 )}
+
+                <ModelsPanel models={models} />
 
                 <Card>
                     <CardContent className="space-y-4 pt-6">

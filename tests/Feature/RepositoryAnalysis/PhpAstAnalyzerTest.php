@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\RepositoryAnalysis;
 
+use App\Models\AnalysisIssue;
 use App\Models\CodeFile;
 use App\Models\Project;
 use App\Models\ProjectRevision;
@@ -11,6 +12,7 @@ use App\PhpAnalysis\PhpFileInput;
 use App\PhpAnalysis\PhpRevisionAnalyzer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
 class PhpAstAnalyzerTest extends TestCase
@@ -79,6 +81,7 @@ class PhpAstAnalyzerTest extends TestCase
         [$project, $revision] = $this->revision();
         $supported = $this->codeFile($revision, 'Supported.php');
         $broken = $this->codeFile($revision, 'Broken.php.fixture');
+        Event::fake(['eloquent.created: '.AnalysisIssue::class]);
         $analyzer = app(PhpRevisionAnalyzer::class);
 
         $first = $analyzer->analyze($revision, base_path('tests/Fixtures/PHP'));
@@ -89,6 +92,7 @@ class PhpAstAnalyzerTest extends TestCase
         $this->assertSame(15, $first->symbolsPersisted);
         $this->assertSame(6, $first->relationsPersisted);
         $this->assertSame(1, $first->issuesPersisted);
+        Event::assertDispatchedTimes('eloquent.created: '.AnalysisIssue::class, 2);
         $this->assertDatabaseCount('code_symbols', 15);
         $this->assertDatabaseCount('code_relations', 6);
         $this->assertDatabaseHas('analysis_issues', [

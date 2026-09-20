@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\RepositoryAnalysis;
 
+use App\Models\AnalysisIssue;
 use App\Models\CodeFile;
+use App\Models\LaravelRoute;
 use App\Models\ProjectRevision;
 use App\Models\User;
 use App\PhpAnalysis\PhpFileAnalyzer;
@@ -10,6 +12,7 @@ use App\PhpAnalysis\PhpFileInput;
 use App\PhpAnalysis\PhpRevisionAnalyzer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
 class LaravelRouteAnalyzerTest extends TestCase
@@ -55,6 +58,7 @@ class LaravelRouteAnalyzerTest extends TestCase
         $source->revisions()->save($revision);
         $routesFile = $this->codeFile($revision, 'Routes.php');
         $this->codeFile($revision, 'Controllers.php');
+        Event::fake(['eloquent.created: '.LaravelRoute::class, 'eloquent.created: '.AnalysisIssue::class]);
 
         $first = app(PhpRevisionAnalyzer::class)->analyze(
             $revision,
@@ -67,6 +71,12 @@ class LaravelRouteAnalyzerTest extends TestCase
 
         $this->assertEquals($first, $second);
         $this->assertSame(10, $first->routesPersisted);
+        Event::assertDispatchedTimes('eloquent.created: '.LaravelRoute::class, 20);
+        Event::assertDispatchedTimes('eloquent.created: '.AnalysisIssue::class, $first->issuesPersisted * 2);
+        $route = LaravelRoute::query()->where('name', 'admin.users')->firstOrFail();
+        $this->assertSame(['auth'], $route->middleware);
+        $this->assertSame('index', $route->metadata['controller_method']);
+        $this->assertSame('App\Http\Controllers\AdminController', $route->controllerSymbol->qualified_name);
         $this->assertDatabaseCount('laravel_routes', 10);
         $this->assertSame(8, DB::table('laravel_routes')->whereNotNull('controller_symbol_id')->count());
         $resolvedMethodCount = DB::table('laravel_routes')

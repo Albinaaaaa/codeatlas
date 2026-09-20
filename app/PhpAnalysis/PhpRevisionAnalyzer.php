@@ -2,7 +2,12 @@
 
 namespace App\PhpAnalysis;
 
+use App\LaravelAnalysis\LaravelModelAnalyzer;
+use App\Models\AnalysisIssue;
+use App\Models\CodeRelation;
+use App\Models\CodeSymbol;
 use App\Models\IndexRun;
+use App\Models\LaravelRoute;
 use App\Models\ProjectRevision;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -11,6 +16,7 @@ final class PhpRevisionAnalyzer
 {
     public function __construct(
         private readonly PhpFileAnalyzer $fileAnalyzer,
+        private readonly LaravelModelAnalyzer $modelAnalyzer,
     ) {}
 
     public function analyze(
@@ -72,12 +78,11 @@ final class PhpRevisionAnalyzer
         return DB::transaction(function () use ($revision, $run, $analyses): PhpRevisionAnalysis {
             $projectId = (int) $revision->project_id;
             $revisionId = (int) $revision->id;
-            $now = now();
 
             DB::table('analysis_issues')
                 ->where('project_id', $projectId)
                 ->where('project_revision_id', $revisionId)
-                ->whereIn('category', ['php_ast', 'laravel_route'])
+                ->whereIn('category', ['php_ast', 'laravel_route', 'laravel_model'])
                 ->delete();
             DB::table('laravel_routes')
                 ->where('project_id', $projectId)
@@ -107,20 +112,20 @@ final class PhpRevisionAnalyzer
                     $parentId = $symbol->parentKey === null
                         ? null
                         : $symbolIds[$analysis->file->codeFileId.':'.$symbol->parentKey];
-                    $symbolId = DB::table('code_symbols')->insertGetId([
-                        'project_id' => $projectId,
-                        'project_revision_id' => $revisionId,
-                        'code_file_id' => $analysis->file->codeFileId,
-                        'parent_symbol_id' => $parentId,
+                    $record = new CodeSymbol([
                         'kind' => $symbol->kind,
                         'name' => $symbol->name,
                         'qualified_name' => $symbol->qualifiedName,
                         'visibility' => $symbol->visibility,
                         'start_line' => $symbol->startLine,
                         'end_line' => $symbol->endLine,
-                        'created_at' => $now,
-                        'updated_at' => $now,
                     ]);
+                    $record->project()->associate($projectId);
+                    $record->revision()->associate($revision);
+                    $record->codeFile()->associate($analysis->file->codeFileId);
+                    $record->parentSymbol()->associate($parentId);
+                    $record->save();
+                    $symbolId = (int) $record->id;
                     $symbolIds[$localKey] = $symbolId;
                     $qualifiedSymbolIds[$symbol->qualifiedName] ??= $symbolId;
                     $symbolCount++;
@@ -129,19 +134,18 @@ final class PhpRevisionAnalyzer
 
             foreach ($analyses as $analysis) {
                 foreach ($analysis->relations as $relation) {
-                    DB::table('code_relations')->insert([
-                        'project_id' => $projectId,
-                        'project_revision_id' => $revisionId,
-                        'from_symbol_id' => $symbolIds[$analysis->file->codeFileId.':'.$relation->fromSymbolKey],
-                        'to_symbol_id' => $qualifiedSymbolIds[$relation->targetName] ?? null,
-                        'code_file_id' => $analysis->file->codeFileId,
+                    $record = new CodeRelation([
                         'type' => $relation->type,
                         'target_name' => $relation->targetName,
                         'start_line' => $relation->startLine,
                         'end_line' => $relation->endLine,
-                        'created_at' => $now,
-                        'updated_at' => $now,
                     ]);
+                    $record->project()->associate($projectId);
+                    $record->revision()->associate($revision);
+                    $record->codeFile()->associate($analysis->file->codeFileId);
+                    $record->fromSymbol()->associate($symbolIds[$analysis->file->codeFileId.':'.$relation->fromSymbolKey]);
+                    $record->toSymbol()->associate($qualifiedSymbolIds[$relation->targetName] ?? null);
+                    $record->save();
                     $relationCount++;
                 }
 
@@ -156,34 +160,29 @@ final class PhpRevisionAnalyzer
                         ? 'Closure'
                         : $route->controller.($route->controllerMethod === null ? '' : '@'.$route->controllerMethod);
 
-                    DB::table('laravel_routes')->insert([
-                        'project_id' => $projectId,
-                        'project_revision_id' => $revisionId,
-                        'code_file_id' => $analysis->file->codeFileId,
-                        'controller_symbol_id' => $controllerSymbolId,
+                    $record = new LaravelRoute([
                         'method' => $route->method,
                         'uri' => $route->uri,
                         'name' => $route->name,
                         'action' => $action,
-                        'middleware' => json_encode($route->middleware, JSON_THROW_ON_ERROR),
+                        'middleware' => $route->middleware,
                         'start_line' => $route->startLine,
                         'end_line' => $route->endLine,
-                        'metadata' => json_encode([
+                        'metadata' => [
                             'controller_method' => $route->controllerMethod,
                             'controller_method_symbol_id' => $methodSymbolId,
-                        ], JSON_THROW_ON_ERROR),
-                        'created_at' => $now,
-                        'updated_at' => $now,
+                        ],
                     ]);
+                    $record->project()->associate($projectId);
+                    $record->revision()->associate($revision);
+                    $record->codeFile()->associate($analysis->file->codeFileId);
+                    $record->controllerSymbol()->associate($controllerSymbolId);
+                    $record->save();
                     $routeCount++;
                 }
 
                 foreach ($analysis->issues as $issue) {
-                    DB::table('analysis_issues')->insert([
-                        'project_id' => $projectId,
-                        'project_revision_id' => $revisionId,
-                        'index_run_id' => $run?->id,
-                        'code_file_id' => $analysis->file->codeFileId,
+                    $record = new AnalysisIssue([
                         'severity' => $issue->severity,
                         'category' => 'php_ast',
                         'code' => $issue->code,
@@ -192,18 +191,17 @@ final class PhpRevisionAnalyzer
                         'source_path' => $analysis->file->path,
                         'start_line' => $issue->startLine,
                         'end_line' => $issue->endLine,
-                        'created_at' => $now,
-                        'updated_at' => $now,
                     ]);
+                    $record->project()->associate($projectId);
+                    $record->revision()->associate($revision);
+                    $record->run()->associate($run);
+                    $record->codeFile()->associate($analysis->file->codeFileId);
+                    $record->save();
                     $issueCount++;
                 }
 
                 foreach ($analysis->routeIssues as $issue) {
-                    DB::table('analysis_issues')->insert([
-                        'project_id' => $projectId,
-                        'project_revision_id' => $revisionId,
-                        'index_run_id' => $run?->id,
-                        'code_file_id' => $analysis->file->codeFileId,
+                    $record = new AnalysisIssue([
                         'severity' => $issue->severity,
                         'category' => 'laravel_route',
                         'code' => $issue->code,
@@ -212,19 +210,26 @@ final class PhpRevisionAnalyzer
                         'source_path' => $analysis->file->path,
                         'start_line' => $issue->startLine,
                         'end_line' => $issue->endLine,
-                        'created_at' => $now,
-                        'updated_at' => $now,
                     ]);
+                    $record->project()->associate($projectId);
+                    $record->revision()->associate($revision);
+                    $record->run()->associate($run);
+                    $record->codeFile()->associate($analysis->file->codeFileId);
+                    $record->save();
                     $issueCount++;
                 }
             }
+
+            $modelAnalysis = $this->modelAnalyzer->persist($revision, $analyses, $qualifiedSymbolIds, $run);
 
             return new PhpRevisionAnalysis(
                 filesAnalyzed: count($analyses),
                 symbolsPersisted: $symbolCount,
                 relationsPersisted: $relationCount,
                 routesPersisted: $routeCount,
-                issuesPersisted: $issueCount,
+                issuesPersisted: $issueCount + $modelAnalysis['issues'],
+                modelsPersisted: $modelAnalysis['models'],
+                modelRelationsPersisted: $modelAnalysis['relations'],
             );
         });
     }

@@ -10,5 +10,7 @@ final readonly class PhpRevisionAnalysis
         public int $relationsPersisted,
         public int $routesPersisted,
         public int $issuesPersisted,
+        public int $modelsPersisted = 0,
+        public int $modelRelationsPersisted = 0,
     ) {}
 }
