@@ -59,6 +59,7 @@ final class PhpFileAnalyzer
                 routes: $routeAnalysis->routes,
                 routeIssues: $routeAnalysis->issues,
                 modelCandidates: $this->modelCandidates($statements),
+                statements: $statements,
             );
         } catch (Error $error) {
             $line = max(1, $error->getStartLine());

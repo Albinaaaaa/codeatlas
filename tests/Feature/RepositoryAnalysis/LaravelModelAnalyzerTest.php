@@ -12,12 +12,12 @@ use App\Models\Project;
 use App\Models\ProjectRevision;
 use App\Models\User;
 use App\PhpAnalysis\PhpRevisionAnalyzer;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Testing\AssertableInertia as Assert;
 use LogicException;
+use Tests\RefreshDatabase;
 use Tests\TestCase;
 
 class LaravelModelAnalyzerTest extends TestCase

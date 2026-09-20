@@ -5,9 +5,9 @@ namespace Tests\Feature\Projects;
 use App\Models\Project;
 use App\Models\ProjectRevision;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
+use Tests\RefreshDatabase;
 use Tests\TestCase;
 
 class ProjectManagementTest extends TestCase

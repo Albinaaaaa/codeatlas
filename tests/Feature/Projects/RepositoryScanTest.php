@@ -10,7 +10,6 @@ use App\Models\ProjectRevision;
 use App\Models\ProjectSource;
 use App\Models\User;
 use App\ProjectSources\LocalDirectorySource;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\File;
 use Illuminate\Testing\TestResponse;
@@ -19,6 +18,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
+use Tests\RefreshDatabase;
 use Tests\TestCase;
 
 class RepositoryScanTest extends TestCase

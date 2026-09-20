@@ -8,8 +8,8 @@ use App\Models\Project;
 use App\Models\ProjectSource;
 use App\Models\User;
 use App\ProjectSources\LocalDirectorySource;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
+use Tests\RefreshDatabase;
 use Tests\TestCase;
 
 class LocalProjectSourceTest extends TestCase

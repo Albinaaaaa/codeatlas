@@ -14,6 +14,7 @@ final readonly class PhpFileAnalysis
      * @param  list<LaravelRouteDefinition>  $routes
      * @param  list<PhpAnalysisIssue>  $routeIssues
      * @param  list<Class_>  $modelCandidates
+     * @param  array<\PhpParser\Node>  $statements
      */
     public function __construct(
         public PhpFileInput $file,
@@ -23,5 +24,6 @@ final readonly class PhpFileAnalysis
         public array $routes,
         public array $routeIssues,
         public array $modelCandidates = [],
+        public array $statements = [],
     ) {}
 }

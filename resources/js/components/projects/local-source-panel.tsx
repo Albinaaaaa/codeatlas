@@ -1,4 +1,4 @@
-import { Form } from '@inertiajs/react';
+import { Form, usePoll } from '@inertiajs/react';
 import {
     ChevronUp,
     Folder,
@@ -136,6 +136,7 @@ export default function LocalSourcePanel({
                         )}
 
                         <RepositoryScanPanel
+                            key={source.id}
                             endpoint={endpoints.scan}
                             scan={source.scan}
                             sourceAvailable={source.status === 'available'}
@@ -204,6 +205,25 @@ function RepositoryScanPanel({
     sourceAvailable: boolean;
 }) {
     const { locale, t } = useTranslations();
+    const [requestedScan, setRequestedScan] = useState<string | null>(null);
+    const scanVersion = JSON.stringify(scan);
+    const awaitingScan = requestedScan === scanVersion;
+    const scanning =
+        awaitingScan ||
+        scan?.status === 'pending' ||
+        scan?.status === 'running';
+    const { start, stop } = usePoll(2000, {}, { autoStart: false });
+
+    useEffect(() => {
+        if (scanning) {
+            start();
+        } else {
+            stop();
+        }
+
+        return stop;
+    }, [scanning, start, stop]);
+
     const completedAt = scan?.completed_at
         ? new Intl.DateTimeFormat(locale === 'uk' ? 'uk-UA' : 'en-US', {
               dateStyle: 'medium',
@@ -225,17 +245,23 @@ function RepositoryScanPanel({
                 {scan && (
                     <Badge
                         variant={
-                            scan.status === 'completed'
+                            !scanning && scan.status === 'completed'
                                 ? 'default'
                                 : 'secondary'
                         }
                     >
-                        {t(`projects.scan.status.${scan.status}`)}
+                        {t(
+                            `projects.scan.status.${awaitingScan ? 'pending' : scan.status}`,
+                        )}
                     </Badge>
                 )}
             </div>
 
-            {scan ? (
+            {awaitingScan ? (
+                <p role="status" className="text-sm text-muted-foreground">
+                    {t('projects.scan.status.pending')}
+                </p>
+            ) : scan ? (
                 <dl className="grid gap-3 text-sm sm:grid-cols-[10rem_1fr]">
                     <dt className="font-medium">
                         {t('projects.scan.revision')}
@@ -268,23 +294,31 @@ function RepositoryScanPanel({
                 </p>
             )}
 
+            {scan?.status === 'failed' && !awaitingScan && (
+                <InputError message={t('projects.scan.failed')} />
+            )}
+
             <Form
                 action={endpoint}
                 method="post"
                 options={{ preserveScroll: true }}
+                onBefore={() => setRequestedScan(scanVersion)}
+                onError={() => setRequestedScan(null)}
             >
                 {({ processing, errors }) => (
                     <div className="space-y-2">
                         <Button
                             type="submit"
-                            disabled={!sourceAvailable || processing}
+                            disabled={
+                                !sourceAvailable || processing || scanning
+                            }
                         >
-                            {processing ? (
+                            {processing || scanning ? (
                                 <LoaderCircle className="animate-spin" />
                             ) : (
                                 <ScanSearch />
                             )}
-                            {processing
+                            {processing || scanning
                                 ? t('projects.scan.scanning')
                                 : t('projects.scan.action')}
                         </Button>

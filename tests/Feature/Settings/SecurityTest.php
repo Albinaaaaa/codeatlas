@@ -3,10 +3,10 @@
 namespace Tests\Feature\Settings;
 
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Inertia\Testing\AssertableInertia as Assert;
 use Laravel\Fortify\Features;
+use Tests\RefreshDatabase;
 use Tests\TestCase;
 
 class SecurityTest extends TestCase

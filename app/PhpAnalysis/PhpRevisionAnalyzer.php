@@ -3,6 +3,7 @@
 namespace App\PhpAnalysis;
 
 use App\LaravelAnalysis\LaravelModelAnalyzer;
+use App\LaravelAnalysis\LaravelAsyncAnalyzer;
 use App\Models\AnalysisIssue;
 use App\Models\CodeRelation;
 use App\Models\CodeSymbol;
@@ -17,6 +18,7 @@ final class PhpRevisionAnalyzer
     public function __construct(
         private readonly PhpFileAnalyzer $fileAnalyzer,
         private readonly LaravelModelAnalyzer $modelAnalyzer,
+        private readonly LaravelAsyncAnalyzer $asyncAnalyzer,
     ) {}
 
     public function analyze(
@@ -221,6 +223,7 @@ final class PhpRevisionAnalyzer
             }
 
             $modelAnalysis = $this->modelAnalyzer->persist($revision, $analyses, $qualifiedSymbolIds, $run);
+            $relationCount += $this->asyncAnalyzer->persist($revision, $analyses, $qualifiedSymbolIds);
 
             return new PhpRevisionAnalysis(
                 filesAnalyzed: count($analyses),

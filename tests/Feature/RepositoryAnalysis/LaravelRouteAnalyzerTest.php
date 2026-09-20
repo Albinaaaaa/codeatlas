@@ -10,9 +10,9 @@ use App\Models\User;
 use App\PhpAnalysis\PhpFileAnalyzer;
 use App\PhpAnalysis\PhpFileInput;
 use App\PhpAnalysis\PhpRevisionAnalyzer;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Tests\RefreshDatabase;
 use Tests\TestCase;
 
 class LaravelRouteAnalyzerTest extends TestCase

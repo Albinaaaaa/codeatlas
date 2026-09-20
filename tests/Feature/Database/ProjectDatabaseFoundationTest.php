@@ -15,9 +15,9 @@ use App\Models\ProjectSource;
 use App\Models\ProjectTechnology;
 use App\Models\User;
 use Illuminate\Database\QueryException;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Tests\RefreshDatabase;
 use Tests\TestCase;
 
 class ProjectDatabaseFoundationTest extends TestCase

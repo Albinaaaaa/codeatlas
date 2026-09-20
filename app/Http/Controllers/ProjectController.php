@@ -106,6 +106,7 @@ class ProjectController extends Controller
             'localSourceConfigured' => $localDirectory->isConfigured(),
             'routes' => $this->routesFor($project),
             'models' => $this->modelsFor($project),
+            'asyncStructure' => [],
         ]);
     }
 
