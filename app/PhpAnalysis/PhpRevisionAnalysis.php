@@ -12,5 +12,10 @@ final readonly class PhpRevisionAnalysis
         public int $issuesPersisted,
         public int $modelsPersisted = 0,
         public int $modelRelationsPersisted = 0,
+        public int $databaseTablesPersisted = 0,
+        public int $databaseColumnsPersisted = 0,
+        public int $databaseIndexesPersisted = 0,
+        public int $databaseForeignKeysPersisted = 0,
+        public int $migrationIssuesPersisted = 0,
     ) {}
 }

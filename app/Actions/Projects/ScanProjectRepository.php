@@ -83,6 +83,10 @@ final class ScanProjectRepository
                     'laravel_routes' => $phpAnalysis->routesPersisted,
                     'laravel_models' => $phpAnalysis->modelsPersisted,
                     'laravel_model_relations' => $phpAnalysis->modelRelationsPersisted,
+                    'database_tables' => $phpAnalysis->databaseTablesPersisted,
+                    'database_columns' => $phpAnalysis->databaseColumnsPersisted,
+                    'database_indexes' => $phpAnalysis->databaseIndexesPersisted,
+                    'database_foreign_keys' => $phpAnalysis->databaseForeignKeysPersisted,
                 ],
             ]);
             $run->update([
@@ -99,6 +103,10 @@ final class ScanProjectRepository
                     'snapshot_fingerprint' => $snapshot->fingerprint,
                     'laravel_models' => $phpAnalysis->modelsPersisted,
                     'laravel_model_relations' => $phpAnalysis->modelRelationsPersisted,
+                    'database_tables' => $phpAnalysis->databaseTablesPersisted,
+                    'database_columns' => $phpAnalysis->databaseColumnsPersisted,
+                    'database_indexes' => $phpAnalysis->databaseIndexesPersisted,
+                    'database_foreign_keys' => $phpAnalysis->databaseForeignKeysPersisted,
                     'revision_created' => $snapshot->revisionCreated,
                 ],
             ]);

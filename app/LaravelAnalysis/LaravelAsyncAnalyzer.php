@@ -29,8 +29,8 @@ final class LaravelAsyncAnalyzer
     /**
      * Runs inside revision persistence, using only the already parsed snapshot.
      *
-     * @param list<PhpFileAnalysis> $analyses
-     * @param array<string, int> $symbolIds
+     * @param  list<PhpFileAnalysis>  $analyses
+     * @param  array<string, int>  $symbolIds
      */
     public function persist(ProjectRevision $revision, array $analyses, array $symbolIds): int
     {

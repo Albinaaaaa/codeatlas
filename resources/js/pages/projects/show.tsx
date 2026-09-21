@@ -24,6 +24,12 @@ type Props = {
     localSourceConfigured: boolean;
     routes: LaravelRouteSummary[];
     models: LaravelModelSummary[];
+    database: {
+        tables: Array<{ id: number; name: string; schema_name: string; metadata: Record<string, unknown> }>;
+        columns: Array<{ id: number; database_table_id: number; name: string; data_type: string; native_type: string | null; is_nullable: boolean; default_value: string | null; metadata: Record<string, unknown> }>;
+        indexes: Array<{ id: number; database_table_id: number; name: string; is_unique: boolean; is_primary: boolean; columns: string[]; metadata: Record<string, unknown> }>;
+        foreign_keys: Array<{ id: number; database_table_id: number; name: string; referenced_table_name: string; columns: Array<{ column: string; referenced_column: string }>; metadata: Record<string, unknown> }>;
+    };
 };
 
 function formatDate(date: string, locale: Locale): string {
@@ -39,6 +45,7 @@ export default function ProjectsShow({
     localSourceConfigured,
     routes,
     models,
+    database,
 }: Props) {
     const { locale, t } = useTranslations();
 
@@ -110,6 +117,21 @@ export default function ProjectsShow({
                 )}
 
                 <ModelsPanel models={models} />
+
+                <Card>
+                    <CardContent className="space-y-4 pt-6">
+                        <div>
+                            <h2 className="font-medium">Database</h2>
+                            <p className="text-sm text-muted-foreground">Tables, columns, indexes and physical foreign keys found in migration files.</p>
+                        </div>
+                        {database.tables.length === 0 ? <p className="text-sm text-muted-foreground">No statically resolvable migration schema was found.</p> : database.tables.map((table) => {
+                            const columns = database.columns.filter((column) => column.database_table_id === table.id);
+                            const indexes = database.indexes.filter((index) => index.database_table_id === table.id);
+                            const foreignKeys = database.foreign_keys.filter((foreignKey) => foreignKey.database_table_id === table.id);
+                            return <div key={table.id} className="space-y-2 rounded-md border p-3"><h3 className="font-mono text-sm font-medium">{table.schema_name}.{table.name}</h3><div className="grid gap-2 text-sm md:grid-cols-2"><div><div className="font-medium">Columns</div>{columns.length === 0 ? <span className="text-muted-foreground">—</span> : columns.map((column) => <div key={column.id} className="font-mono text-xs">{column.name}: {column.data_type}{column.is_nullable ? ' nullable' : ''}{column.default_value !== null ? ` default ${column.default_value}` : ''}</div>)}</div><div><div className="font-medium">Indexes</div>{indexes.length === 0 ? <span className="text-muted-foreground">—</span> : indexes.map((index) => <div key={index.id} className="text-xs">{index.name} ({index.columns.join(', ')}){index.is_primary ? ' primary' : index.is_unique ? ' unique' : ''}</div>)}<div className="mt-2 font-medium">Foreign keys</div>{foreignKeys.length === 0 ? <span className="text-muted-foreground">—</span> : foreignKeys.map((foreignKey) => <div key={foreignKey.id} className="text-xs">{foreignKey.name}: {foreignKey.columns.map((column) => `${column.column} → ${foreignKey.referenced_table_name}.${column.referenced_column}`).join(', ')}</div>)}</div></div></div>;
+                        })}
+                    </CardContent>
+                </Card>
 
                 <Card>
                     <CardContent className="space-y-4 pt-6">

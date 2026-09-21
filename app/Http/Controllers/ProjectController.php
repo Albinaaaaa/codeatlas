@@ -107,6 +107,7 @@ class ProjectController extends Controller
             'routes' => $this->routesFor($project),
             'models' => $this->modelsFor($project),
             'asyncStructure' => [],
+            'database' => $this->databaseFor($project),
         ]);
     }
 
@@ -292,5 +293,39 @@ class ProjectController extends Controller
                 ];
             })
             ->all();
+    }
+
+    /** @return array{tables:list<array<string,mixed>>, columns:list<array<string,mixed>>, indexes:list<array<string,mixed>>, foreign_keys:list<array<string,mixed>>} */
+    private function databaseFor(Project $project): array
+    {
+        $revisionId = $project->revisions()->max('id');
+        if ($revisionId === null) {
+            return ['tables' => [], 'columns' => [], 'indexes' => [], 'foreign_keys' => []];
+        }
+        $where = fn ($query) => $query->where('project_id', $project->id)->where('project_revision_id', $revisionId);
+
+        return [
+            'tables' => DB::table('database_tables')->where($where)->orderBy('name')->get()->map(fn (object $row): array => [
+                'id' => (int) $row->id, 'name' => (string) $row->name, 'schema_name' => (string) $row->schema_name,
+                'metadata' => json_decode((string) $row->metadata, true) ?: [],
+            ])->all(),
+            'columns' => DB::table('database_columns')->where($where)->orderBy('database_table_id')->orderBy('ordinal_position')->get()->map(fn (object $row): array => [
+                'id' => (int) $row->id, 'database_table_id' => (int) $row->database_table_id, 'name' => (string) $row->name,
+                'data_type' => (string) $row->data_type, 'native_type' => $row->native_type, 'is_nullable' => (bool) $row->is_nullable,
+                'default_value' => $row->default_value, 'metadata' => json_decode((string) $row->metadata, true) ?: [],
+            ])->all(),
+            'indexes' => DB::table('database_indexes')->where($where)->orderBy('database_table_id')->orderBy('name')->get()->map(fn (object $row): array => [
+                'id' => (int) $row->id, 'database_table_id' => (int) $row->database_table_id, 'name' => (string) $row->name,
+                'is_unique' => (bool) $row->is_unique, 'is_primary' => (bool) $row->is_primary,
+                'columns' => DB::table('database_index_columns')->where('database_index_id', $row->id)->orderBy('ordinal_position')->pluck('expression')->all(),
+                'metadata' => json_decode((string) $row->metadata, true) ?: [],
+            ])->all(),
+            'foreign_keys' => DB::table('database_foreign_keys')->where($where)->orderBy('database_table_id')->orderBy('name')->get()->map(fn (object $row): array => [
+                'id' => (int) $row->id, 'database_table_id' => (int) $row->database_table_id, 'name' => (string) $row->name,
+                'referenced_table_name' => (string) $row->referenced_table_name,
+                'columns' => DB::table('database_foreign_key_columns as key_columns')->join('database_columns as columns', 'columns.id', '=', 'key_columns.database_column_id')->where('key_columns.database_foreign_key_id', $row->id)->orderBy('key_columns.ordinal_position')->get()->map(fn (object $column): array => ['column' => (string) $column->name, 'referenced_column' => (string) $column->referenced_column_name])->all(),
+                'metadata' => json_decode((string) $row->metadata, true) ?: [],
+            ])->all(),
+        ];
     }
 }

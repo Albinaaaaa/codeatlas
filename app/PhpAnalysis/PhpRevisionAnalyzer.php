@@ -2,8 +2,9 @@
 
 namespace App\PhpAnalysis;
 
-use App\LaravelAnalysis\LaravelModelAnalyzer;
 use App\LaravelAnalysis\LaravelAsyncAnalyzer;
+use App\LaravelAnalysis\LaravelMigrationAnalyzer;
+use App\LaravelAnalysis\LaravelModelAnalyzer;
 use App\Models\AnalysisIssue;
 use App\Models\CodeRelation;
 use App\Models\CodeSymbol;
@@ -19,6 +20,7 @@ final class PhpRevisionAnalyzer
         private readonly PhpFileAnalyzer $fileAnalyzer,
         private readonly LaravelModelAnalyzer $modelAnalyzer,
         private readonly LaravelAsyncAnalyzer $asyncAnalyzer,
+        private readonly LaravelMigrationAnalyzer $migrationAnalyzer,
     ) {}
 
     public function analyze(
@@ -224,6 +226,7 @@ final class PhpRevisionAnalyzer
 
             $modelAnalysis = $this->modelAnalyzer->persist($revision, $analyses, $qualifiedSymbolIds, $run);
             $relationCount += $this->asyncAnalyzer->persist($revision, $analyses, $qualifiedSymbolIds);
+            $migrationAnalysis = $this->migrationAnalyzer->persist($revision, $analyses, $run);
 
             return new PhpRevisionAnalysis(
                 filesAnalyzed: count($analyses),
@@ -233,6 +236,11 @@ final class PhpRevisionAnalyzer
                 issuesPersisted: $issueCount + $modelAnalysis['issues'],
                 modelsPersisted: $modelAnalysis['models'],
                 modelRelationsPersisted: $modelAnalysis['relations'],
+                databaseTablesPersisted: $migrationAnalysis['tables'],
+                databaseColumnsPersisted: $migrationAnalysis['columns'],
+                databaseIndexesPersisted: $migrationAnalysis['indexes'],
+                databaseForeignKeysPersisted: $migrationAnalysis['foreign_keys'],
+                migrationIssuesPersisted: $migrationAnalysis['issues'],
             );
         });
     }
