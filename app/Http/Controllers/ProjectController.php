@@ -74,7 +74,7 @@ class ProjectController extends Controller
                     'revision',
                     fn ($query) => $query->where('project_source_id', $source->id),
                 )
-                ->with('revision')
+                ->with(['revision', 'steps'])
                 ->latest('id')
                 ->first();
 
@@ -142,7 +142,8 @@ class ProjectController extends Controller
      *     files_count: int,
      *     issues_count: int,
      *     completed_at: string|null,
-     *     failure_reason: string|null
+     *     failure_reason: string|null,
+     *     steps: list<array{name:string,status:string,records_processed:int,metadata:array<string,mixed>,failure_reason:string|null}>
      * }
      */
     private function scanData(IndexRun $run): array
@@ -160,6 +161,13 @@ class ProjectController extends Controller
                 ? $completedAt->toISOString()
                 : null,
             'failure_reason' => $run->failure_reason,
+            'steps' => $run->steps->map(fn ($step): array => [
+                'name' => (string) $step->name,
+                'status' => (string) $step->status,
+                'records_processed' => (int) $step->records_processed,
+                'metadata' => is_array($step->getAttribute('metadata')) ? $step->getAttribute('metadata') : [],
+                'failure_reason' => $step->failure_reason,
+            ])->values()->all(),
         ];
     }
 

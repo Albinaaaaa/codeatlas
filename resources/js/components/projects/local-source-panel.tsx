@@ -277,6 +277,14 @@ function RepositoryScanPanel({
                     <dd className="text-muted-foreground">
                         {scan.issues_count}
                     </dd>
+                    <dt className="font-medium">Stages</dt>
+                    <dd className="flex flex-wrap gap-2 text-muted-foreground">
+                        {scan.steps.map((step) => (
+                            <Badge key={step.name} variant={step.status === 'completed' ? 'default' : step.status === 'failed' ? 'destructive' : 'secondary'}>
+                                {step.name}: {step.status}
+                            </Badge>
+                        ))}
+                    </dd>
                     {completedAt && (
                         <>
                             <dt className="font-medium">
@@ -295,7 +303,14 @@ function RepositoryScanPanel({
             )}
 
             {scan?.status === 'failed' && !awaitingScan && (
-                <InputError message={t('projects.scan.failed')} />
+                <div className="space-y-1">
+                    <InputError message={t('projects.scan.failed')} />
+                    {scan.failure_reason && (
+                        <p className="text-sm text-destructive">
+                            {scan.failure_reason}
+                        </p>
+                    )}
+                </div>
             )}
 
             <Form

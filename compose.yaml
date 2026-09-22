@@ -68,7 +68,7 @@ services:
             target: development
         restart: unless-stopped
         working_dir: /var/www/html
-        command: php artisan queue:work --sleep=1 --tries=1 --timeout=900
+        command: php artisan horizon
         env_file:
             - .env
         environment:

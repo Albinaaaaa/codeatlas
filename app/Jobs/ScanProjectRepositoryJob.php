@@ -28,7 +28,13 @@ class ScanProjectRepositoryJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        $scanRepository->handle($project);
+        if (config('queue.default') === 'sync') {
+            $scanRepository->handle($project);
+
+            return;
+        }
+
+        $scanRepository->start($project);
     }
 
     public function uniqueId(): string

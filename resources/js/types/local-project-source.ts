@@ -8,6 +8,13 @@ export type RepositoryScanSummary = {
     issues_count: number;
     completed_at: string | null;
     failure_reason: string | null;
+    steps: Array<{
+        name: string;
+        status: RepositoryScanStatus;
+        records_processed: number;
+        metadata: Record<string, unknown>;
+        failure_reason: string | null;
+    }>;
 };
 
 export type LocalProjectSourceSummary = {

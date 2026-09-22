@@ -2,6 +2,7 @@
 
 namespace App\Actions\Projects;
 
+use App\Jobs\IndexProjectRevisionStageJob;
 use App\Models\AnalysisIssue;
 use App\Models\IndexRun;
 use App\Models\IndexRunStep;
@@ -137,6 +138,41 @@ final class ScanProjectRepository
                 previous: $exception,
             );
         }
+    }
+
+    /** Prepare a revision and hand the actual indexing stages to the queue. */
+    public function start(Project $project): IndexRun
+    {
+        $source = $this->sourceFor($project);
+        $snapshot = $this->prepareLocalDirectory->prepare($project, $source);
+        $run = new IndexRun(['status' => 'pending', 'trigger' => 'manual']);
+        $run->project()->associate($project);
+        $snapshot->revision->indexRuns()->save($run);
+
+        foreach (['scan', 'php_analysis', 'laravel_analysis', 'database_analysis', 'relation_resolution', 'persistence', 'project_profile', 'finalize'] as $name) {
+            $step = new IndexRunStep(['name' => $name, 'status' => 'pending']);
+            $step->project()->associate($project);
+            $step->revision()->associate($snapshot->revision);
+            $run->steps()->save($step);
+        }
+
+        foreach ($snapshot->issues as $issue) {
+            $this->persistIssue($project, $run, $issue);
+        }
+
+        $run->update([
+            'status' => 'running',
+            'started_at' => now(),
+            'statistics' => [
+                'issues_count' => count($snapshot->issues),
+                'snapshot_fingerprint' => $snapshot->fingerprint,
+                'revision_created' => $snapshot->revisionCreated,
+            ],
+        ]);
+        IndexProjectRevisionStageJob::dispatch($snapshot->revision->id, $run->id, 'scan')
+            ->onQueue('indexing');
+
+        return $run->refresh()->load('revision');
     }
 
     private function persistIssue(
