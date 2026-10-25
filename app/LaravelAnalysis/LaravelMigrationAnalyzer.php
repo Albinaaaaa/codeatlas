@@ -8,6 +8,7 @@ use App\Models\ProjectRevision;
 use App\PhpAnalysis\PhpFileAnalysis;
 use App\PhpAnalysis\PhpFileInput;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use PhpParser\Node;
 
 /**
@@ -47,23 +48,41 @@ final class LaravelMigrationAnalyzer
      * @param  list<Node>  $nodes
      * @param  array<string, int>  $count
      */
-    private function walk(array $nodes, PhpFileInput $file, ProjectRevision $revision, ?IndexRun $run, array &$count): void
+    private function walk(array $nodes, PhpFileInput $file, ProjectRevision $revision, ?IndexRun $run, array &$count, bool $forward = false): void
     {
         foreach ($nodes as $node) {
-            if ($node instanceof Node\Expr\StaticCall
-                && $node->class instanceof Node\Name
-                && $node->name instanceof Node\Identifier
-                && str_ends_with(strtolower($node->class->toString()), '\\schema')
-                && in_array(strtolower($node->name->toString()), ['create', 'table'], true)) {
-                $this->schemaCall($node, $file, $revision, $run, $count);
-            }
-            foreach ($node->getSubNodeNames() as $field) {
-                $value = $node->$field;
-                if ($value instanceof Node) {
-                    $this->walk([$value], $file, $revision, $run, $count);
-                } elseif (is_array($value)) {
-                    $this->walk(array_values(array_filter($value, fn ($entry): bool => $entry instanceof Node)), $file, $revision, $run, $count);
+            if (! $forward) {
+                if ($node instanceof Node\Stmt\Namespace_) {
+                    $this->walk($node->stmts, $file, $revision, $run, $count);
+
+                    continue;
                 }
+                $class = $node instanceof Node\Stmt\Return_ && $node->expr instanceof Node\Expr\New_
+                    ? $node->expr->class : $node;
+                if ($class instanceof Node\Stmt\Class_
+                    && strtolower($class->extends?->toString() ?? '') === 'illuminate\\database\\migrations\\migration') {
+                    $up = $class->getMethod('up');
+                    if ($up !== null && $up->isPublic() && ! $up->isStatic()) {
+                        $this->walk($up->stmts ?? [], $file, $revision, $run, $count, true);
+                    }
+
+                    continue;
+                }
+                if ($node instanceof Node\Stmt\Use_ || $node instanceof Node\Stmt\Nop) {
+                    continue;
+                }
+            }
+
+            $call = $node instanceof Node\Stmt\Expression ? $node->expr : null;
+            if ($forward && $call instanceof Node\Expr\StaticCall
+                && $call->class instanceof Node\Name
+                && $call->name instanceof Node\Identifier
+                && strtolower($call->class->toString()) === 'illuminate\\support\\facades\\schema'
+                && in_array(strtolower($call->name->toString()), ['create', 'table'], true)) {
+                $this->schemaCall($call, $file, $revision, $run, $count);
+            } elseif (! $node instanceof Node\Stmt\Nop) {
+                // Do not descend into conditional branches, deferred closures or helper methods.
+                $this->unsupported($revision, $run, $file, $node, $count);
             }
         }
     }
@@ -81,6 +100,11 @@ final class LaravelMigrationAnalyzer
         }
 
         $operation = strtolower($call->name->toString());
+        if ($operation === 'create' && isset($this->tables[$table])) {
+            $this->unsupported($revision, $run, $file, $call, $count);
+
+            return;
+        }
         $id = $operation === 'table'
             ? ($this->tables[$table] ?? DB::table('database_tables')->where('project_revision_id', $revision->id)->where('name', $table)->value('id'))
             : null;
@@ -115,6 +139,8 @@ final class LaravelMigrationAnalyzer
             if ($statement instanceof Node\Stmt\Expression && $statement->expr instanceof Node\Expr\MethodCall
                 && $this->baseVariable($statement->expr) === $variable) {
                 $this->blueprintCall($statement->expr, $table, $id, $file, $revision, $run, $count);
+            } elseif (! $statement instanceof Node\Stmt\Nop) {
+                $this->unsupported($revision, $run, $file, $statement, $count);
             }
         }
     }
@@ -211,17 +237,23 @@ final class LaravelMigrationAnalyzer
         $count['columns']++;
         $constrained = collect($modifiers)->first(fn (array $modifier): bool => ($modifier['name'] ?? null) === 'constrained');
         if ($constrained !== null) {
-            $referencedTable = is_string($constrained['value'] ?? null) ? $constrained['value'] : rtrim($column, '_id').'s';
+            $reference = $method === 'foreignid' ? $this->constrainedReference($constrained['call'], $column) : null;
+            if ($reference === null) {
+                $this->unsupported($revision, $run, $file, $call, $count);
+
+                return;
+            }
+            [$referencedTable, $referencedColumn, $indexName] = $reference;
             $foreignKeyId = DB::table('database_foreign_keys')->insertGetId([
                 'project_id' => $revision->project_id, 'project_revision_id' => $revision->id, 'database_table_id' => $tableId,
                 'referenced_database_table_id' => $this->tables[$referencedTable] ?? null,
-                'name' => $table.'_'.$column.'_foreign', 'referenced_schema_name' => 'public', 'referenced_table_name' => $referencedTable,
+                'name' => $indexName ?? $table.'_'.$column.'_foreign', 'referenced_schema_name' => 'public', 'referenced_table_name' => $referencedTable,
                 'metadata' => json_encode($this->provenance($file, $root)), 'created_at' => now(), 'updated_at' => now(),
             ]);
             DB::table('database_foreign_key_columns')->insert([
                 'project_id' => $revision->project_id, 'project_revision_id' => $revision->id, 'database_foreign_key_id' => $foreignKeyId,
                 'database_column_id' => DB::table('database_columns')->where('database_table_id', $tableId)->where('name', $column)->value('id'),
-                'ordinal_position' => 1, 'referenced_column_name' => 'id', 'created_at' => now(), 'updated_at' => now(),
+                'ordinal_position' => 1, 'referenced_column_name' => $referencedColumn, 'created_at' => now(), 'updated_at' => now(),
             ]);
             $count['foreign_keys']++;
         }
@@ -231,13 +263,41 @@ final class LaravelMigrationAnalyzer
         }
     }
 
+    /** @return array{string, string, ?string}|null */
+    private function constrainedReference(Node\Expr\MethodCall $call, string $column): ?array
+    {
+        $values = ['table' => null, 'column' => null, 'indexName' => null];
+        $names = array_keys($values);
+        foreach ($call->args as $position => $arg) {
+            if (! $arg instanceof Node\Arg || $arg->unpack) {
+                return null;
+            }
+            $name = $arg->name?->toString() ?? ($names[$position] ?? '');
+            if (! array_key_exists($name, $values)) {
+                return null;
+            }
+            if ($arg->value instanceof Node\Expr\ConstFetch && strtolower($arg->value->name->toString()) === 'null') {
+                continue;
+            }
+            $value = $this->string($arg->value);
+            if ($value === null || $value === '') {
+                return null;
+            }
+            $values[$name] = $value;
+        }
+        $referencedColumn = $values['column'] ?? 'id';
+        $table = $values['table'] ?? Str::plural(Str::beforeLast($column, '_'.$referencedColumn));
+
+        return $table === '' ? null : [$table, $referencedColumn, $values['indexName']];
+    }
+
     /** @return array{Node\Expr\MethodCall, list<array<string, mixed>>} */
     private function chain(Node\Expr\MethodCall $call): array
     {
         $modifiers = [];
         while ($call->var instanceof Node\Expr\MethodCall) {
             $name = $call->name instanceof Node\Identifier ? strtolower($call->name->toString()) : '';
-            $modifiers[] = ['name' => $name, 'value' => $this->literal($call->args[0]->value ?? null), 'args' => array_map(fn (Node\Arg $arg): mixed => $this->literal($arg->value), $call->args)];
+            $modifiers[] = ['call' => $call, 'name' => $name, 'value' => $this->literal($call->args[0]->value ?? null), 'args' => array_map(fn (Node\Arg $arg): mixed => $this->literal($arg->value), $call->args)];
             $call = $call->var;
         }
 

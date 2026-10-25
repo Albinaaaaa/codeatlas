@@ -86,7 +86,7 @@ final class PhpRevisionAnalyzer
             DB::table('analysis_issues')
                 ->where('project_id', $projectId)
                 ->where('project_revision_id', $revisionId)
-                ->whereIn('category', ['php_ast', 'laravel_route', 'laravel_model'])
+                ->whereIn('category', ['php_ast', 'laravel_route', 'laravel_model', 'laravel_migration'])
                 ->delete();
             DB::table('laravel_routes')
                 ->where('project_id', $projectId)
@@ -233,7 +233,7 @@ final class PhpRevisionAnalyzer
                 symbolsPersisted: $symbolCount,
                 relationsPersisted: $relationCount,
                 routesPersisted: $routeCount,
-                issuesPersisted: $issueCount + $modelAnalysis['issues'],
+                issuesPersisted: $issueCount + $modelAnalysis['issues'] + $migrationAnalysis['issues'],
                 modelsPersisted: $modelAnalysis['models'],
                 modelRelationsPersisted: $modelAnalysis['relations'],
                 databaseTablesPersisted: $migrationAnalysis['tables'],
