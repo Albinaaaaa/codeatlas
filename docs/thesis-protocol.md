@@ -1,4 +1,6 @@
-# Thesis protocol 1.0.0
+# Thesis protocol 1.1.0
+
+Phase 05 adds the shared prompt template and conservative context estimation. See [Context Builder](context-builder.md) for packing rules, separate budgets and approximation limits. The original Phase 01 configuration remains in Git history; the historical Phase 01 scope and operational results below are retained.
 
 Research: **Research on Methods for Context Construction and Optimization in Large Language Models for Source Code Analysis.**
 

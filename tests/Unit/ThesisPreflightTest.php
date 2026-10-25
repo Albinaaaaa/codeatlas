@@ -38,7 +38,8 @@ class ThesisPreflightTest extends TestCase
     {
         $this->assertTrue($this->app->environment('testing'));
         $this->assertSame([], config('database.connections'));
-        $this->assertSame('1.0.0', config('thesis.protocol_version'));
+        $this->assertSame('1.1.0', config('thesis.protocol_version'));
+        $this->assertSame('1.1.0', config('thesis.prompt.version'));
         $this->assertSame(['qwen2.5-coder:1.5b', 'qwen2.5-coder:7b', 'qwen2.5-coder:14b'], config('thesis.models'));
         $this->assertSame(['baseline', 'keyword', 'structure_aware'], config('thesis.methods'));
         $this->assertSame('incomplete', config('thesis.status'));
