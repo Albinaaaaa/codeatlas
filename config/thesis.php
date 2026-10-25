@@ -25,6 +25,10 @@ return [
         'top_p' => 0.9,
         'repeat_penalty' => 1.1,
     ],
+    'inference' => [
+        'timeout_seconds' => (int) env('THESIS_OLLAMA_TIMEOUT', 300),
+        'connect_timeout_seconds' => 3,
+    ],
     'repetitions' => (int) env('THESIS_REPETITIONS', 3),
     'dataset' => [
         'id' => null,
