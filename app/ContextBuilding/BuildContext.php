@@ -133,7 +133,11 @@ final class BuildContext
             $usage = $trialUsage;
         }
 
-        return ['revision_id' => $revisionId, 'revision_identifier' => $revision->identifier, 'question' => $question,
+        $metadata = $revision->getAttribute('metadata');
+        $fingerprint = is_array($metadata) ? ($metadata['snapshot']['fingerprint'] ?? null) : null;
+
+        return ['revision_id' => $revisionId, 'revision_identifier' => $revision->identifier, 'revision_fingerprint' => $fingerprint,
+            'question' => $question, 'selected_context' => $evidence,
             'model' => $model, 'method' => $method, 'protocol_version' => $protocol, 'prompt_template_version' => $version,
             'prompt' => $prompt, 'prompt_hash' => hash('sha256', $prompt), 'selected_chunks' => $selected, 'rejected_chunks' => $rejected,
             'token_usage' => ['is_estimate' => true, 'counting_method' => ConservativeTokenEstimator::METHOD, ...$usage,

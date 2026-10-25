@@ -15,7 +15,7 @@ final class OllamaInference
     public function __construct(private readonly BuildContext $builder) {}
 
     /** @return array<string, mixed> */
-    public function ask(int $revisionId, string $question, string $method, string $model): array
+    public function ask(int $revisionId, #[\SensitiveParameter] string $question, string $method, string $model): array
     {
         $started = hrtime(true);
         if (! in_array($model, self::MODELS, true)) {
@@ -40,26 +40,31 @@ final class OllamaInference
             'num_ctx' => $context['limits']['context_window_tokens'],
             'num_predict' => $context['limits']['max_output_tokens'],
         ];
+        $configuration = config('thesis');
+        $attempt = ['context' => $context, 'generation_options' => $options, 'protocol_configuration' => $configuration,
+            'model_metadata' => [], 'submission_attempted' => false, 'stage' => 'model_inspection',
+            'request' => ['stream' => false, 'raw' => false, 'timeout_seconds' => $timeout, 'connect_timeout_seconds' => $connectTimeout],
+            'timings_ms' => ['context_construction' => $contextMs, 'inference_wall' => null, 'total_wall' => null], '_started' => $started];
         $client = Http::baseUrl(rtrim($url, '/'))->acceptJson()->connectTimeout($connectTimeout)->withoutRedirecting();
         try {
             $inspection = $client->timeout(min(10, $timeout))->post('/api/show', ['model' => $model]);
         } catch (ConnectionException) {
             // Do not retain transport exceptions: they can contain endpoint or request details.
-            throw new OllamaInferenceException('Ollama model inspection failed: connection failure or timeout.');
+            throw $this->failure('Ollama model inspection failed: connection failure or timeout.', $attempt);
         }
-        $metadata = $this->object($inspection, 'model inspection');
+        $metadata = $this->object($inspection, 'model inspection', $attempt);
         $template = $metadata['template'] ?? null;
         $system = $metadata['system'] ?? null;
         if (! is_string($template) || trim($template) === '' || ($system !== null && ! is_string($system))) {
-            throw new OllamaInferenceException('Invalid Ollama model metadata: prompt template or system metadata is unavailable or malformed.');
+            throw $this->failure('Invalid Ollama model metadata: prompt template or system metadata is unavailable or malformed.', $attempt);
         }
         $info = $metadata['model_info'] ?? null;
         if (! is_array($info) || $info === []) {
-            throw new OllamaInferenceException('Invalid Ollama model metadata: model_info is unavailable.');
+            throw $this->failure('Invalid Ollama model metadata: model_info is unavailable.', $attempt);
         }
         $capabilities = $metadata['capabilities'] ?? null;
         if ($capabilities !== null && (! is_array($capabilities) || ! in_array('completion', $capabilities, true))) {
-            throw new OllamaInferenceException('The requested model does not advertise completion support.');
+            throw $this->failure('The requested model does not advertise completion support.', $attempt);
         }
         $limits = [];
         foreach ($info as $key => $value) {
@@ -68,31 +73,40 @@ final class OllamaInference
             }
         }
         $declaredLimit = $limits === [] ? null : min($limits);
+        $modelMetadata = ['declared_context_limit' => $declaredLimit,
+            'context_limit_status' => $declaredLimit === null ? 'unknown' : 'validated_against_requested_num_ctx', 'capabilities' => $capabilities,
+            'template_sha256' => hash('sha256', $template), 'system_sha256' => $system === null ? null : hash('sha256', $system)];
+        $attempt['model_metadata'] = $modelMetadata;
         if ($declaredLimit !== null && $options['num_ctx'] > $declaredLimit) {
-            throw new OllamaInferenceException('Requested num_ctx exceeds the declared model context limit; no automatic reduction or model substitution is allowed.');
+            throw $this->failure('Requested num_ctx exceeds the declared model context limit; no automatic reduction or model substitution is allowed.', $attempt);
         }
         $payload = ['model' => $model, 'prompt' => $context['prompt'], 'stream' => false, 'raw' => false, 'options' => $options];
         $generationStarted = hrtime(true);
+        $attempt['submission_attempted'] = true;
+        $attempt['stage'] = 'generation';
+        $attempt['_generation_started'] = $generationStarted;
         try {
             $response = $client->timeout($timeout)->post('/api/generate', $payload);
         } catch (ConnectionException) {
-            throw new OllamaInferenceException('Ollama generation failed: connection failure or timeout.');
+            throw $this->failure('Ollama generation failed: connection failure or timeout.', $attempt);
         }
         $inferenceMs = $this->elapsed($generationStarted);
-        $data = $this->object($response, 'generation');
+        $data = $this->object($response, 'generation', $attempt);
+        $attempt['response'] = array_intersect_key($data, array_flip(['model', 'done', 'done_reason', 'response',
+            'prompt_eval_count', 'eval_count', 'total_duration', 'load_duration', 'prompt_eval_duration', 'eval_duration']));
         if (($data['done'] ?? null) !== true || ! is_string($data['model'] ?? null)
             || ! is_string($data['response'] ?? null)) {
-            throw new OllamaInferenceException('Incomplete or malformed Ollama generation response.');
+            throw $this->failure('Incomplete or malformed Ollama generation response.', $attempt);
         }
         if ($data['model'] !== $model) {
-            throw new OllamaInferenceException('Returned model does not match the requested model.');
+            throw $this->failure('Returned model does not match the requested model.', $attempt);
         }
         if (trim($data['response']) === '') {
-            throw new OllamaInferenceException('Ollama returned an empty answer.');
+            throw $this->failure('Ollama returned an empty answer.', $attempt);
         }
         $reason = $data['done_reason'] ?? null;
         if ($reason !== null && ! is_string($reason)) {
-            throw new OllamaInferenceException('Invalid Ollama completion reason.');
+            throw $this->failure('Invalid Ollama completion reason.', $attempt);
         }
         $status = match ($reason) {
             'stop' => 'complete', 'length' => 'truncated', default => 'unknown',
@@ -102,7 +116,7 @@ final class OllamaInference
         foreach (['prompt_eval_count', 'eval_count', 'total_duration', 'load_duration', 'prompt_eval_duration', 'eval_duration'] as $field) {
             $value = $data[$field] ?? null;
             if ($value !== null && (! is_int($value) || $value < 0)) {
-                throw new OllamaInferenceException('Invalid Ollama metric: '.$field.'.');
+                throw $this->failure('Invalid Ollama metric: '.$field.'.', $attempt);
             }
             $metrics[$field] = $value;
             if ($value === null) {
@@ -114,10 +128,11 @@ final class OllamaInference
         $actualFits = $actual === null ? null : $actual + $options['num_predict'] <= $options['num_ctx'];
 
         return ['requested_model' => $model, 'returned_model' => $data['model'],
-            'revision_id' => $context['revision_id'], 'revision_identifier' => $context['revision_identifier'],
+            'revision_id' => $context['revision_id'], 'revision_identifier' => $context['revision_identifier'], 'revision_fingerprint' => $context['revision_fingerprint'],
             'method' => $method, 'question' => $question, 'protocol_version' => $context['protocol_version'],
             'prompt_template_version' => $context['prompt_template_version'], 'prompt' => $context['prompt'], 'prompt_hash' => $context['prompt_hash'],
             'answer' => $data['response'], 'selected_chunks' => $context['selected_chunks'], 'rejected_chunks' => $context['rejected_chunks'],
+            'selected_context' => $context['selected_context'], 'protocol_configuration' => $configuration, 'submission_attempted' => true,
             'estimated_token_usage' => $context['token_usage'], 'actual_metrics' => $metrics, 'metrics_unavailable' => $unavailable,
             'duration_unit' => 'nanoseconds',
             'timings_ms' => ['context_construction' => $contextMs, 'inference_wall' => $inferenceMs, 'total_wall' => $this->elapsed($started)],
@@ -126,24 +141,35 @@ final class OllamaInference
                 'actual_prompt_plus_output_reserve_fits_num_ctx' => $actualFits],
             'completion' => ['status' => $status, 'done' => true, 'stop_reason' => $reason],
             'generation_options' => $options, 'context_limits' => $context['limits'],
-            'request' => ['stream' => false, 'raw' => false, 'timeout_seconds' => $timeout, 'connect_timeout_seconds' => $connectTimeout],
-            'model_metadata' => ['declared_context_limit' => $declaredLimit,
-                'context_limit_status' => $declaredLimit === null ? 'unknown' : 'validated_against_requested_num_ctx', 'capabilities' => $capabilities,
-                'template_sha256' => hash('sha256', $template), 'system_sha256' => $system === null ? null : hash('sha256', $system)]];
+            'request' => $attempt['request'], 'model_metadata' => $modelMetadata];
     }
 
-    /** @return array<string, mixed> */
-    private function object(Response $response, string $stage): array
+    /** @param array<string, mixed> $attempt
+     * @return array<string, mixed>
+     */
+    private function object(#[\SensitiveParameter] Response $response, string $stage, #[\SensitiveParameter] array $attempt): array
     {
         if (! $response->successful()) {
-            throw new OllamaInferenceException('Ollama '.$stage.' returned HTTP '.$response->status().'. Verify service availability and that the requested model is installed.');
+            throw $this->failure('Ollama '.$stage.' returned HTTP '.$response->status().'. Verify service availability and that the requested model is installed.', $attempt);
         }
         $data = $response->json();
         if (! is_array($data) || array_is_list($data) || array_key_exists('error', $data)) {
-            throw new OllamaInferenceException('Invalid JSON object or error response from Ollama '.$stage.'.');
+            throw $this->failure('Invalid JSON object or error response from Ollama '.$stage.'.', $attempt);
         }
 
         return $data;
+    }
+
+    /** @param array<string, mixed> $attempt */
+    private function failure(string $message, #[\SensitiveParameter] array $attempt): OllamaInferenceException
+    {
+        $attempt['timings_ms']['total_wall'] = $this->elapsed($attempt['_started']);
+        if (isset($attempt['_generation_started'])) {
+            $attempt['timings_ms']['inference_wall'] = $this->elapsed($attempt['_generation_started']);
+        }
+        unset($attempt['_started'], $attempt['_generation_started']);
+
+        return new OllamaInferenceException($message, $attempt);
     }
 
     private function positive(string $key): int
