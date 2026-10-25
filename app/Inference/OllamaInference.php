@@ -15,7 +15,7 @@ final class OllamaInference
     public function __construct(private readonly BuildContext $builder) {}
 
     /** @return array<string, mixed> */
-    public function ask(int $revisionId, #[\SensitiveParameter] string $question, string $method, string $model): array
+    public function prepare(int $revisionId, #[\SensitiveParameter] string $question, string $method, string $model): array
     {
         $started = hrtime(true);
         if (! in_array($model, self::MODELS, true)) {
@@ -45,6 +45,22 @@ final class OllamaInference
             'model_metadata' => [], 'submission_attempted' => false, 'stage' => 'model_inspection',
             'request' => ['stream' => false, 'raw' => false, 'timeout_seconds' => $timeout, 'connect_timeout_seconds' => $connectTimeout],
             'timings_ms' => ['context_construction' => $contextMs, 'inference_wall' => null, 'total_wall' => null], '_started' => $started];
+
+        return $attempt;
+    }
+
+    /** @return array<string, mixed> */
+    public function ask(int $revisionId, #[\SensitiveParameter] string $question, string $method, string $model): array
+    {
+        $attempt = $this->prepare($revisionId, $question, $method, $model);
+        $context = $attempt['context'];
+        $options = $attempt['generation_options'];
+        $configuration = $attempt['protocol_configuration'];
+        $started = $attempt['_started'];
+        $contextMs = $attempt['timings_ms']['context_construction'];
+        $timeout = $attempt['request']['timeout_seconds'];
+        $connectTimeout = $attempt['request']['connect_timeout_seconds'];
+        $url = config('services.ollama.url');
         $client = Http::baseUrl(rtrim($url, '/'))->acceptJson()->connectTimeout($connectTimeout)->withoutRedirecting();
         try {
             $inspection = $client->timeout(min(10, $timeout))->post('/api/show', ['model' => $model]);

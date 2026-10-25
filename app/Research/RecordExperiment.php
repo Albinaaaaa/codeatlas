@@ -15,12 +15,18 @@ final class RecordExperiment
     /**
      * @param  array<string, mixed>|OllamaInferenceException  $outcome
      * @param  array<string, mixed>  $modelProvenance
+     * @param  array{experiment_key: string, case_key: string, runner_version: string, repetitions: int, total_cases: int}|null  $execution
      */
     public function record(#[\SensitiveParameter] DatasetQuestion $question, #[\SensitiveParameter] array|OllamaInferenceException $outcome,
-        string $attemptId, int $repetitionIndex, array $modelProvenance = []): ThesisExperimentAttempt
+        string $attemptId, int $repetitionIndex, array $modelProvenance = [], ?array $execution = null): ThesisExperimentAttempt
     {
         if (! Str::isUuid($attemptId) || $repetitionIndex < 1) {
             throw new InvalidArgumentException('A unique attempt UUID and a positive repetition index are required.');
+        }
+        if ($execution !== null && (! preg_match('/\A[a-f0-9]{64}\z/', $execution['experiment_key'])
+            || ! preg_match('/\A[a-f0-9]{64}\z/', $execution['case_key']) || trim($execution['runner_version']) === ''
+            || $execution['repetitions'] < $repetitionIndex || $execution['total_cases'] < 1)) {
+            throw new InvalidArgumentException('Execution requires SHA-256 identities and a consistent runner configuration.');
         }
         $result = $outcome instanceof OllamaInferenceException ? $this->failureResult($outcome) : $outcome;
         $revision = ProjectRevision::query()->find($question->revisionId);
@@ -75,16 +81,18 @@ final class RecordExperiment
             'method' => $result['method'], 'model' => $result['requested_model'], 'prompt_sha256' => $result['prompt_hash'],
             'protocol_configuration' => $configuration, 'generation_options' => $result['generation_options'],
             'request' => $result['request'], 'model_provenance' => $provenance];
-        $runKey = hash('sha256', json_encode($this->canonical($identity), JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $runKey = $this->identityHash($identity);
         try {
             return DB::transaction(fn () => ThesisExperimentAttempt::forceCreate([
                 'project_id' => $revision->project_id, 'project_revision_id' => $question->revisionId, 'run_key' => $runKey,
+                'experiment_key' => $execution['experiment_key'] ?? null, 'case_key' => $execution['case_key'] ?? null,
                 'attempt_id' => $attemptId, 'repetition_index' => $repetitionIndex, 'dataset_id' => $question->datasetId,
                 'dataset_version' => $question->datasetVersion, 'dataset_sha256' => $question->datasetSha256, 'split' => $question->split,
                 'question_id' => $question->id, 'revision_fingerprint' => $question->fingerprint, 'protocol_version' => $result['protocol_version'],
                 'method' => $result['method'], 'requested_model' => $result['requested_model'], 'returned_model' => $result['returned_model'] ?? null,
                 'prompt_version' => $result['prompt_template_version'], 'prompt_sha256' => $result['prompt_hash'], 'status' => $status,
-                'payload' => ['dataset_question' => $question->evaluationData(), 'inference' => $result, 'model_provenance' => $provenance],
+                'payload' => ['dataset_question' => $question->evaluationData(), 'inference' => $result, 'model_provenance' => $provenance,
+                    'execution' => $execution],
             ]));
         } catch (UniqueConstraintViolationException) {
             throw new InvalidArgumentException('Attempt UUID already exists; stored attempts cannot be overwritten.');
@@ -121,6 +129,12 @@ final class RecordExperiment
             'timings_ms' => $data['timings_ms'], 'completion' => ['status' => $partial ? 'incomplete' : 'failed',
                 'done' => $response['done'] ?? null, 'stop_reason' => is_string($response['done_reason'] ?? null) ? $response['done_reason'] : null],
             'error' => ['type' => $error::class, 'message' => $error->getMessage(), 'stage' => $data['stage']]];
+    }
+
+    /** @param array<string, mixed> $identity */
+    public function identityHash(array $identity): string
+    {
+        return hash('sha256', json_encode($this->canonical($identity), JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 
     private function canonical(mixed $value): mixed
