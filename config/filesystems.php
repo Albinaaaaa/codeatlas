@@ -47,6 +47,15 @@ return [
             'report' => true,
         ],
 
+        'thesis_research' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/thesis-research'),
+            'serve' => false,
+            'visibility' => 'private',
+            'throw' => true,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
