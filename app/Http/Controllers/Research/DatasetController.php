@@ -22,7 +22,8 @@ class DatasetController extends Controller
 
         return Inertia::render('projects/research/datasets/index', [
             'project' => $project->only(['id', 'name']),
-            'endpoints' => ['index' => route('projects.research.datasets.index', $project)],
+            'endpoints' => ['index' => route('projects.research.datasets.index', $project),
+                'experiments' => route('projects.research.experiments.index', $project)],
             'datasets' => ResearchDataset::query()->where('project_id', $project->id)->latest('id')
                 ->get(['id', 'dataset_id', 'dataset_version', 'split', 'status', 'created_at'])
                 ->map(fn (ResearchDataset $dataset): array => [...$dataset->toArray(), 'url' => route('projects.research.datasets.show', [$project, $dataset])]),
@@ -62,6 +63,7 @@ class DatasetController extends Controller
             'endpoints' => [
                 'index' => route('projects.research.datasets.index', $project),
                 'show' => route('projects.research.datasets.show', [$project, $dataset]),
+                'experiments' => route('projects.research.experiments.index', $project),
             ],
         ]);
     }

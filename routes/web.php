@@ -7,6 +7,7 @@ use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectScanController;
 use App\Http\Controllers\Research\DatasetController;
 use App\Http\Controllers\Research\EvidenceController;
+use App\Http\Controllers\Research\ExperimentController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
@@ -34,6 +35,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('{dataset}/freeze', [DatasetController::class, 'freeze'])->name('freeze');
         Route::get('{dataset}/questions/{question}/evidence/{evidence}', EvidenceController::class)
             ->whereNumber(['question', 'evidence'])->name('evidence');
+    });
+
+    Route::prefix('projects/{project}/research/experiments')->name('projects.research.experiments.')->group(function () {
+        Route::get('/', [ExperimentController::class, 'index'])->name('index');
+        Route::post('/', [ExperimentController::class, 'store'])->name('store');
+        Route::get('{experiment}', [ExperimentController::class, 'show'])->name('show');
+        Route::post('{experiment}/start', [ExperimentController::class, 'start'])->name('start');
+        Route::post('{experiment}/resume', [ExperimentController::class, 'resume'])->name('resume');
     });
 
     Route::get('projects/{project}/sources/local/directories', LocalDirectoryBrowserController::class)

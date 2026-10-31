@@ -24,7 +24,7 @@ import type { ResearchDataset, ResearchProject } from '@/types/research';
 type Props = {
     project: ResearchProject;
     dataset: ResearchDataset;
-    endpoints: { index: string; show: string };
+    endpoints: { index: string; show: string; experiments: string };
 };
 
 export default function DatasetShow({ project, dataset, endpoints }: Props) {
@@ -48,9 +48,18 @@ export default function DatasetShow({ project, dataset, endpoints }: Props) {
                             </Badge>
                         </div>
                     </div>
-                    <Button variant="outline" asChild>
-                        <Link href={endpoints.index}>{t('research.back')}</Link>
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button variant="outline" asChild>
+                            <Link href={endpoints.experiments}>
+                                {t('research.experiments')}
+                            </Link>
+                        </Button>
+                        <Button variant="outline" asChild>
+                            <Link href={endpoints.index}>
+                                {t('research.back')}
+                            </Link>
+                        </Button>
+                    </div>
                 </div>
                 <Card>
                     <CardContent className="space-y-3 pt-6">

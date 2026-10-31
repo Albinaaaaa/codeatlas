@@ -210,6 +210,18 @@ return [
             'timeout' => 900,
             'nice' => 0,
         ],
+        'supervisor-research' => [
+            'connection' => 'redis',
+            'queue' => ['research'],
+            'balance' => 'simple',
+            'maxProcesses' => 1,
+            'maxTime' => 0,
+            'maxJobs' => 0,
+            'memory' => 256,
+            'tries' => 1,
+            'timeout' => 1200,
+            'nice' => 0,
+        ],
     ],
 
     'environments' => [

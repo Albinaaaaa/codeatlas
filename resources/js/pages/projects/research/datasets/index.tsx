@@ -20,7 +20,7 @@ import type { ResearchProject, ResearchRevision } from '@/types/research';
 
 type Props = {
     project: ResearchProject;
-    endpoints: { index: string };
+    endpoints: { index: string; experiments: string };
     revisions: ResearchRevision[];
     datasets: {
         id: number;
@@ -51,6 +51,11 @@ export default function DatasetsIndex({
                     <p className="text-sm text-muted-foreground">
                         {t('research.description')}
                     </p>
+                    <Button variant="outline" asChild>
+                        <Link href={endpoints.experiments}>
+                            {t('research.experiments')}
+                        </Link>
+                    </Button>
                 </div>
                 <Card>
                     <CardHeader>

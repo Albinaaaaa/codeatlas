@@ -30,7 +30,8 @@ final class RunExperiments
      * @return array<string, mixed>
      */
     public function run(string $path, int $repetitions, bool $dryRun = false, ?int $limit = null,
-        bool $resume = false, ?callable $progress = null, ?callable $stop = null): array
+        bool $resume = false, ?callable $progress = null, ?callable $stop = null,
+        ?string $expectedExperimentId = null, ?array $expectedModelProvenance = null, bool $retryFailed = true): array
     {
         if ($repetitions < 1 || ($limit !== null && $limit < 1)) {
             throw new InvalidArgumentException('Repetitions and limit must be positive integers.');
@@ -67,11 +68,19 @@ final class RunExperiments
             $this->records->identityHash(['seed' => $configuration['generation']['seed'], 'case' => $b])));
         $experiment = $this->records->identityHash(['runner_version' => self::VERSION, 'dataset_sha256' => $dataset['dataset_sha256'],
             'configuration' => $configuration, 'endpoint' => $endpoint, 'repetitions' => $repetitions, 'matrix' => $cases]);
+        if ($expectedExperimentId !== null && ! hash_equals($expectedExperimentId, $experiment)) {
+            throw new InvalidArgumentException('Prepared experiment identity changed; prepare a new experiment.');
+        }
         $provenance = $dryRun ? [] : $this->provenance();
+        if ($expectedModelProvenance !== null && $expectedModelProvenance !== $provenance) {
+            throw new InvalidArgumentException('Model provenance changed during the experiment; prepare a new experiment.');
+        }
         $attempted = 0;
         $skipped = 0;
+        $deferred = 0;
         $interrupted = false;
         foreach ($cases as &$case) {
+            $previousStatus = null;
             $modelProvenance = $provenance[$case['model']] ?? ['ollama_version' => null, 'model_digest' => null];
             $case['case_key'] = $this->records->identityHash(['experiment_key' => $experiment, 'case' => $case, 'model_provenance' => $modelProvenance]);
             $case['status'] = 'pending';
@@ -79,6 +88,7 @@ final class RunExperiments
             if (! $dryRun) {
                 $history = ThesisExperimentAttempt::query()->where('case_key', $case['case_key'])->orderByDesc('id')->get(['status']);
                 $case['status'] = $history->contains('status', 'successful') ? 'successful' : ($history->first()?->getAttribute('status') ?? 'pending');
+                $previousStatus = $history->first()?->getAttribute('status');
                 if ($case['status'] === 'successful' && ! $case['provenance_verified']) {
                     $case['status'] = 'pending';
                 }
@@ -88,6 +98,11 @@ final class RunExperiments
             }
             if ($resume && $case['status'] === 'successful' && $case['provenance_verified']) {
                 $skipped++;
+
+                continue;
+            }
+            if ($resume && ! $retryFailed && in_array($case['status'], ['failed', 'incomplete'], true)) {
+                $deferred++;
 
                 continue;
             }
@@ -122,7 +137,8 @@ final class RunExperiments
             $case['status'] = $case['status'] === 'successful' ? 'successful' : $record->status;
             $case['attempt_id'] = $record->attempt_id;
             if ($progress !== null) {
-                $progress(['experiment_id' => $experiment, 'attempted' => $attempted, 'total' => count($cases), ...$case]);
+                $progress(['experiment_id' => $experiment, 'attempted' => $attempted, 'total' => count($cases),
+                    'previous_status' => $previousStatus, ...$case]);
             }
         }
         unset($case);
@@ -131,9 +147,11 @@ final class RunExperiments
 
         return ['experiment_id' => $experiment, 'runner_version' => self::VERSION, 'dataset_sha256' => $dataset['dataset_sha256'],
             'protocol_version' => $configuration['protocol_version'], 'dry_run' => $dryRun, 'resume' => $resume,
-            'model_provenance' => $provenance, 'case_identity_final' => ! $dryRun, 'questions' => count($questions), 'repetitions' => $repetitions,
+            'model_provenance' => $provenance, 'model_provenance_verified' => ! $dryRun && count(array_filter($provenance,
+                fn (array $item): bool => $item['model_digest'] !== null && $item['ollama_version'] !== null)) === count(self::MODELS),
+            'case_identity_final' => ! $dryRun, 'questions' => count($questions), 'repetitions' => $repetitions,
             'total' => count($cases), 'attempted' => $attempted, 'completed' => $completed, 'failed' => $counts['failed'] ?? 0,
-            'incomplete' => $counts['incomplete'] ?? 0, 'skipped' => $skipped, 'pending' => $counts['pending'] ?? 0,
+            'incomplete' => $counts['incomplete'] ?? 0, 'skipped' => $skipped, 'deferred' => $deferred, 'pending' => $counts['pending'] ?? 0,
             'remaining' => count($cases) - $completed, 'interrupted' => $interrupted, 'cases' => $cases];
     }
 
