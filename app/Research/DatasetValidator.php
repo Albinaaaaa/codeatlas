@@ -2,10 +2,9 @@
 
 namespace App\Research;
 
-use App\Models\CodeFile;
 use App\Models\ProjectRevision;
+use App\RepositoryScanning\ReadSnapshotEvidence;
 use DateTimeImmutable;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use InvalidArgumentException;
 use JsonException;
@@ -13,6 +12,8 @@ use JsonException;
 final class DatasetValidator
 {
     private const ID = '/\A[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\z/';
+
+    public function __construct(private readonly ReadSnapshotEvidence $evidence) {}
 
     /**
      * @return array{total: int, valid: int, invalid: int, dataset_sha256: string, errors: list<array{line: int, question_id: ?string, message: string}>, questions: list<DatasetQuestion>}
@@ -79,28 +80,14 @@ final class DatasetValidator
                         $revisions[$revisionId] = ProjectRevision::query()->find($revisionId);
                     }
                     $revision = $revisions[$revisionId];
-                    $metadata = $revision?->getAttribute('metadata');
-                    $snapshot = is_array($metadata) ? ($metadata['snapshot'] ?? null) : null;
-                    if ($revision === null || ! is_array($snapshot)
-                        || ($snapshot['fingerprint'] ?? null) !== $row['revision_fingerprint']
-                        || ($snapshot['fingerprint_algorithm'] ?? null) !== 'sha256' || ($snapshot['format_version'] ?? null) !== 1
-                        || $revision->identifier !== 'snapshot:sha256:'.$row['revision_fingerprint']
-                        || ($snapshot['disk'] ?? null) !== 'repository_snapshots'
-                        || ($snapshot['path'] ?? null) !== 'projects/'.$revision->project_id.'/revisions/'.$revision->id) {
+                    if ($revision === null) {
                         throw new InvalidArgumentException('Revision fingerprint or private snapshot metadata does not match.');
                     }
-                    $disk = Storage::disk('repository_snapshots');
-                    $root = $this->inside($disk->path(''), $snapshot['path']);
+                    $root = $this->evidence->root($revision, $row['revision_fingerprint']);
                     foreach ($row['evidence'] as $evidence) {
                         $key = $revisionId.':'.$evidence['path'];
                         if (! isset($files[$key])) {
-                            $absolute = $this->inside($root, $evidence['path']);
-                            $file = CodeFile::query()->where('project_id', $revision->project_id)->where('project_revision_id', $revision->id)
-                                ->where('path', $evidence['path'])->first();
-                            $content = is_file($absolute) && is_readable($absolute) ? file_get_contents($absolute) : false;
-                            if ($file === null || $content === false || ! hash_equals($file->content_hash, hash('sha256', $content))) {
-                                throw new InvalidArgumentException('Evidence file is missing, unindexed or differs from its indexed hash.');
-                            }
+                            $content = $this->evidence->content($revision, $root, $evidence['path']);
                             $breaks = preg_match_all('/\r\n|\r|\n/', $content);
                             $files[$key] = ['lines' => $content === '' ? 0 : $breaks + (str_ends_with($content, "\n") || str_ends_with($content, "\r") ? 0 : 1)];
                         }
@@ -187,32 +174,5 @@ final class DatasetValidator
         }
 
         return $errors;
-    }
-
-    private function inside(string $root, string $relative): string
-    {
-        if ($relative === '' || str_contains($relative, "\0") || str_contains($relative, '\\') || str_contains($relative, ':')
-            || str_starts_with($relative, '/') || array_intersect(explode('/', $relative), ['', '.', '..']) !== []) {
-            throw new InvalidArgumentException('Evidence must use a safe snapshot-relative path.');
-        }
-        $root = realpath($root);
-        if ($root === false) {
-            throw new InvalidArgumentException('Private snapshot root is unavailable.');
-        }
-        $candidate = $root;
-        foreach (explode('/', $relative) as $segment) {
-            $candidate .= DIRECTORY_SEPARATOR.$segment;
-            if (is_link($candidate)) {
-                throw new InvalidArgumentException('Snapshot evidence must not use symbolic links.');
-            }
-        }
-        $path = realpath($candidate);
-        $prefix = $root.DIRECTORY_SEPARATOR;
-        if ($path === false || ! str_starts_with(PHP_OS_FAMILY === 'Windows' ? strtolower($path) : $path,
-            PHP_OS_FAMILY === 'Windows' ? strtolower($prefix) : $prefix)) {
-            throw new InvalidArgumentException('Evidence path is missing or outside the private snapshot.');
-        }
-
-        return $path;
     }
 }

@@ -86,6 +86,11 @@ export default function ProjectsShow({
                     </div>
 
                     <Button variant="outline" asChild>
+                        <Link href={show(project.id).url + '/research/datasets'}>
+                            {t('research.title')}
+                        </Link>
+                    </Button>
+                    <Button variant="outline" asChild>
                         <Link href={index()}>{t('projects.show.back')}</Link>
                     </Button>
                 </div>
