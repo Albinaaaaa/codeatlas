@@ -53,7 +53,7 @@ export default function ProjectsShow({
         <>
             <Head title={project.name} />
 
-            <div className="flex h-full flex-1 flex-col gap-6 overflow-x-auto p-4 md:p-6">
+            <div className="flex h-full min-w-0 flex-1 flex-col gap-6 p-4 md:p-6">
                 <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
                     <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-3">
@@ -201,7 +201,7 @@ export default function ProjectsShow({
                                                           )
                                                         : '—'}
                                                 </td>
-                                                <td className="px-3 py-2 align-top font-mono text-xs whitespace-nowrap">
+                                                <td className="break-all px-3 py-2 align-top font-mono text-xs">
                                                     {route.source_path}
                                                     {route.start_line !==
                                                         null &&
