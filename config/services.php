@@ -4,6 +4,9 @@ return [
 
     'ollama' => [
         'url' => env('OLLAMA_URL', 'http://127.0.0.1:11434'),
+        'lock_store' => env('OLLAMA_LOCK_STORE', env('CACHE_STORE', 'redis')),
+        'lock_wait_seconds' => env('OLLAMA_LOCK_WAIT_SECONDS'),
+        'interactive_lock_wait_seconds' => (int) env('OLLAMA_INTERACTIVE_LOCK_WAIT_SECONDS', 15),
     ],
 
     /*

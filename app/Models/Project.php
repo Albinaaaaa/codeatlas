@@ -63,4 +63,10 @@ class Project extends Model
     {
         return $this->hasMany(Conversation::class);
     }
+
+    /** @return HasMany<RepositoryQuestion, $this> */
+    public function questions(): HasMany
+    {
+        return $this->hasMany(RepositoryQuestion::class);
+    }
 }

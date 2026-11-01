@@ -3,8 +3,10 @@
 namespace App\Inference;
 
 use App\ContextBuilding\BuildContext;
+use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
 
@@ -50,10 +52,44 @@ final class OllamaInference
     }
 
     /** @return array<string, mixed> */
-    public function ask(int $revisionId, #[\SensitiveParameter] string $question, string $method, string $model): array
+    public function ask(int $revisionId, #[\SensitiveParameter] string $question, string $method, string $model,
+        ?int $lockWaitSeconds = null): array
     {
         $attempt = $this->prepare($revisionId, $question, $method, $model);
+        $timeout = $attempt['request']['timeout_seconds'];
+        $waitStarted = hrtime(true);
+        $store = config('services.ollama.lock_store') ?: config('cache.default');
+        if (app()->isProduction() && in_array($store, ['array', 'null'], true)) {
+            throw new InvalidArgumentException('Production Ollama inference requires a cache store shared by all application and queue processes.');
+        }
+        $cacheStore = Cache::store($store)->getStore();
+        if (! $cacheStore instanceof LockProvider) {
+            throw new InvalidArgumentException('The configured Ollama lock store must support atomic locks.');
+        }
+        $lock = $cacheStore->lock('codeatlas:ollama-inference', $timeout + 60);
+        $configuredWait = config('services.ollama.lock_wait_seconds');
+        $waitSeconds = $lockWaitSeconds ?? (is_numeric($configuredWait) && (int) $configuredWait > 0 ? (int) $configuredWait : $timeout + 60);
+        if ($waitSeconds < 1) {
+            throw new InvalidArgumentException('The Ollama lock wait must be a positive number of seconds.');
+        }
+
+        return $lock->block($waitSeconds, function () use ($attempt, $waitStarted): array {
+            // Keep queue contention out of measured context and inference wall time.
+            $attempt['_started'] += hrtime(true) - $waitStarted;
+
+            return $this->generate($attempt);
+        });
+    }
+
+    /** @param array<string, mixed> $attempt
+     * @return array<string, mixed>
+     */
+    private function generate(array $attempt): array
+    {
         $context = $attempt['context'];
+        $question = $context['question'];
+        $method = $context['method'];
+        $model = $context['model'];
         $options = $attempt['generation_options'];
         $configuration = $attempt['protocol_configuration'];
         $started = $attempt['_started'];

@@ -222,6 +222,18 @@ return [
             'timeout' => 1200,
             'nice' => 0,
         ],
+        'supervisor-ask' => [
+            'connection' => 'redis',
+            'queue' => ['ask'],
+            'balance' => 'simple',
+            'maxProcesses' => 1,
+            'maxTime' => 0,
+            'maxJobs' => 0,
+            'memory' => 256,
+            'tries' => 20,
+            'timeout' => 720,
+            'nice' => 0,
+        ],
     ],
 
     'environments' => [
@@ -231,11 +243,31 @@ return [
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
+            'supervisor-ask' => [
+                'maxProcesses' => 1,
+                'timeout' => 720,
+                'tries' => 20,
+            ],
+            'supervisor-research' => [
+                'maxProcesses' => 1,
+                'timeout' => 1200,
+                'tries' => 1,
+            ],
         ],
 
         'local' => [
             'supervisor-1' => [
                 'maxProcesses' => 3,
+            ],
+            'supervisor-ask' => [
+                'maxProcesses' => 1,
+                'timeout' => 720,
+                'tries' => 20,
+            ],
+            'supervisor-research' => [
+                'maxProcesses' => 1,
+                'timeout' => 1200,
+                'tries' => 1,
             ],
         ],
     ],

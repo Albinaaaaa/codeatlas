@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AskCodeAtlas\RepositoryQuestionController;
 use App\Http\Controllers\LocalDirectoryBrowserController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\LocalProjectSourceController;
@@ -22,6 +23,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::resource('projects', ProjectController::class)
         ->only(['index', 'create', 'store', 'show']);
+
+    Route::prefix('projects/{project}/ask')->name('projects.ask.')->group(function () {
+        Route::get('history', [RepositoryQuestionController::class, 'index'])->name('history');
+        Route::post('/', [RepositoryQuestionController::class, 'store'])->name('store');
+        Route::get('{question:public_id}', [RepositoryQuestionController::class, 'show'])->name('show');
+    });
 
     Route::post('projects/{project}/scan', ProjectScanController::class)
         ->name('projects.scan');

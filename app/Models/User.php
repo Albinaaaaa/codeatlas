@@ -46,6 +46,12 @@ class User extends Authenticatable implements PasskeyUser
         return $this->hasMany(Project::class);
     }
 
+    /** @return HasMany<RepositoryQuestion, $this> */
+    public function repositoryQuestions(): HasMany
+    {
+        return $this->hasMany(RepositoryQuestion::class);
+    }
+
     /**
      * Get the attributes that should be cast.
      *
