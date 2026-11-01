@@ -12,18 +12,32 @@ final class ExportResults
         private readonly DatasetValidator $validator, private readonly RunExperiments $runner, private readonly RecordExperiment $identity) {}
 
     /** @return array<string, mixed> */
+    public function summaryReport(string $experiment, string $datasetPath, ?int $repetitions = null): array
+    {
+        $entries = $this->entries($experiment);
+
+        return $this->summary($experiment, $datasetPath, $entries, $repetitions, false);
+    }
+
+    /** @return list<string> */
+    public function canonicalSuccessfulAttemptIds(string $experiment, string $datasetPath, ?int $repetitions = null): array
+    {
+        $summary = $this->summaryReport($experiment, $datasetPath, $repetitions);
+
+        return $summary['canonical_attempt_ids'];
+    }
+
+    /** @return array<string, mixed> */
     public function export(string $experiment, ?string $datasetPath = null, ?int $repetitions = null,
         bool $byCategory = false, bool $rawOnly = false): array
     {
-        $attempts = $this->evaluation->attempts($experiment);
-        $grades = ThesisAnswerEvaluation::query()->whereIn('thesis_experiment_attempt_id', $attempts->modelKeys())->get()->keyBy('thesis_experiment_attempt_id');
-        $entries = [];
+        $entries = $this->entries($experiment);
         $raw = [];
         $csv = [];
-        foreach ($attempts as $attempt) {
+        foreach ($entries as $entry) {
+            $attempt = $entry['attempt'];
             $details = $attempt->details();
-            $grade = $grades->get($attempt->id);
-            $entries[] = ['attempt' => $attempt, 'details' => $details, 'grade' => $grade];
+            $grade = $entry['grade'];
             $raw[] = ['attributes' => $attempt->getRawOriginal(), 'details' => $details,
                 'evaluation' => $grade === null ? null : ['attributes' => $grade->getRawOriginal(), 'details' => $grade->details()]];
             $csv[] = $this->flat($attempt, $details, $grade);
@@ -34,7 +48,7 @@ final class ExportResults
                 throw new InvalidArgumentException('A frozen dataset path is required for completeness summaries.');
             }
             $summary = $this->summary($experiment, $datasetPath, $entries, $repetitions, $byCategory);
-        } elseif ($attempts->isEmpty()) {
+        } elseif ($entries === []) {
             throw new InvalidArgumentException('Experiment has no stored attempts.');
         }
         $envelope = ['format_version' => '1.0.0', 'experiment_id' => $experiment, 'attempt_count' => count($raw), 'records' => $raw];
@@ -42,6 +56,7 @@ final class ExportResults
         $outputs = ['raw.json' => json_encode($envelope, ResearchFiles::JSON_FLAGS | JSON_PRETTY_PRINT)."\n",
             'raw.jsonl' => $jsonl === '' ? '' : $jsonl."\n", 'attempts.csv' => $this->files->csv($csv)];
         if ($summary !== null) {
+            unset($summary['canonical_attempt_ids']);
             $outputs['summary.json'] = json_encode($summary, ResearchFiles::JSON_FLAGS | JSON_PRETTY_PRINT)."\n";
             $summaryRows = [];
             foreach ($summary['groups'] as $group) {
@@ -57,8 +72,24 @@ final class ExportResults
             $outputs['summary.csv'] = $this->files->csv($summaryRows);
         }
 
+        $bundle = $this->files->writeBundle($experiment, 'results', $outputs);
+
         return ['experiment_id' => $experiment, 'attempts' => count($raw), 'summary_groups' => $summary === null ? 0 : count($summary['groups']),
-            'files' => $this->files->write($experiment, 'results', $outputs)];
+            'bundle' => $bundle['bundle'], 'files' => $bundle['files']];
+    }
+
+    /** @return list<array{attempt: ThesisExperimentAttempt, details: array<string, mixed>, grade: ?ThesisAnswerEvaluation}> */
+    private function entries(string $experiment): array
+    {
+        $attempts = $this->evaluation->attempts($experiment);
+        $grades = ThesisAnswerEvaluation::query()->whereIn('thesis_experiment_attempt_id', $attempts->modelKeys())
+            ->get()->keyBy('thesis_experiment_attempt_id');
+        $entries = [];
+        foreach ($attempts as $attempt) {
+            $entries[] = ['attempt' => $attempt, 'details' => $attempt->details(), 'grade' => $grades->get($attempt->id)];
+        }
+
+        return $entries;
     }
 
     /**
@@ -116,6 +147,7 @@ final class ExportResults
         }
         $histories = [];
         $provenance = [];
+        $canonicalAttemptIds = [];
         foreach ($entries as $entry) {
             $attempt = $entry['attempt'];
             $question = $questions[$attempt->question_id] ?? null;
@@ -182,6 +214,7 @@ final class ExportResults
                             if ($chosen['attempt']->status !== 'successful') {
                                 continue;
                             }
+                            $canonicalAttemptIds[] = $this->evaluation->identifier($chosen['attempt']);
                             $inference = $chosen['details']['inference'];
                             foreach (['prompt_eval_count', 'eval_count', 'total_duration', 'load_duration', 'prompt_eval_duration', 'eval_duration'] as $name) {
                                 $this->sample($values, $name, $inference['actual_metrics'][$name] ?? null);
@@ -217,7 +250,7 @@ final class ExportResults
             'protocol_version' => $configuration['protocol_version'], 'rubric_version' => ManualEvaluation::RUBRIC, 'repetitions' => $repetitions,
             'selection_rule' => 'earliest_successful_attempt_else_latest_attempt_per_question_model_method_repetition',
             'metric_population' => 'canonical_successful_cases; correctness_and_coverage_only_manually_graded_canonical_cases',
-            'model_provenance' => $modelObservations, 'groups' => $groups];
+            'model_provenance' => $modelObservations, 'groups' => $groups, 'canonical_attempt_ids' => $canonicalAttemptIds];
     }
 
     /** @param array<string, list<int|float>> $values */

@@ -38,6 +38,7 @@ class ResearchExperiment extends Model
             'heartbeat_at' => 'immutable_datetime',
             'finished_at' => 'immutable_datetime',
             'batch_claimed_at' => 'immutable_datetime',
+            'results_unlocked_at' => 'immutable_datetime',
         ];
     }
 }

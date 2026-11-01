@@ -18,9 +18,83 @@ final class ResearchFiles
      */
     public function write(string $experiment, string $kind, #[\SensitiveParameter] array $files): array
     {
+        return $this->writeBundle($experiment, $kind, $files)['files'];
+    }
+
+    /**
+     * @param  array<string, string>  $files
+     * @return array{bundle: string, files: array<string, string>}
+     */
+    public function writeBundle(string $experiment, string $kind, #[\SensitiveParameter] array $files): array
+    {
+        $this->assertIdentity($experiment, $kind);
+        $disk = Storage::build($this->settings());
+        $bundleId = (string) Str::uuid();
+        $bundle = $kind.'/'.$experiment.'/'.$bundleId;
+        $paths = [];
+        foreach ($files as $name => $content) {
+            if (! in_array($name, $this->allowedFiles($kind), true)) {
+                throw new InvalidArgumentException('Invalid research export filename.');
+            }
+            $this->assertNoSymlinkSegments($disk->path($bundle.'/'.$name));
+            $disk->put($bundle.'/'.$name, $content, 'private');
+            $paths[$name] = $disk->path($bundle.'/'.$name);
+        }
+
+        return ['bundle' => $bundleId, 'files' => $paths];
+    }
+
+    /** @return list<string> */
+    public function bundleFiles(string $experiment, string $kind, string $bundleId): array
+    {
+        $this->assertBundle($experiment, $kind, $bundleId);
+        $disk = Storage::build($this->settings());
+
+        return array_values(array_filter($this->allowedFiles($kind), fn (string $name): bool => $this->safePath($disk->path($kind.'/'.$experiment.'/'.$bundleId.'/'.$name)) !== null));
+    }
+
+    public function downloadPath(string $experiment, string $kind, string $bundleId, string $file): string
+    {
+        $this->assertBundle($experiment, $kind, $bundleId);
+        if (! in_array($file, $this->allowedFiles($kind), true)) {
+            throw new InvalidArgumentException('Research export file is not allowlisted.');
+        }
+        $disk = Storage::build($this->settings());
+        $path = $this->safePath($disk->path($kind.'/'.$experiment.'/'.$bundleId.'/'.$file));
+        if ($path === null) {
+            throw new InvalidArgumentException('Research export is unavailable.');
+        }
+
+        return $path;
+    }
+
+    private function assertIdentity(string $experiment, string $kind): void
+    {
         if (! preg_match('/\A[a-f0-9]{64}\z/', $experiment) || ! in_array($kind, ['grading', 'results'], true)) {
             throw new InvalidArgumentException('Invalid research export identity.');
         }
+        $this->settings();
+    }
+
+    private function assertBundle(string $experiment, string $kind, string $bundleId): void
+    {
+        $this->assertIdentity($experiment, $kind);
+        if (! Str::isUuid($bundleId)) {
+            throw new InvalidArgumentException('Invalid research export bundle.');
+        }
+    }
+
+    /** @return list<string> */
+    private function allowedFiles(string $kind): array
+    {
+        return $kind === 'results'
+            ? ['raw.json', 'raw.jsonl', 'attempts.csv', 'summary.json', 'summary.csv']
+            : ['answers.jsonl', 'rubric.json'];
+    }
+
+    /** @return array<string, mixed> */
+    private function settings(): array
+    {
         $settings = config('filesystems.disks.thesis_research');
         $private = str_replace('\\', '/', storage_path('app/private'));
         $root = is_array($settings) ? ($settings['root'] ?? null) : null;
@@ -30,7 +104,7 @@ final class ResearchFiles
             || ($settings['visibility'] ?? null) !== 'private' || ($settings['throw'] ?? null) !== true) {
             throw new InvalidArgumentException('Research exports require non-served private local storage inside storage/app/private.');
         }
-        $directory = $root.'/'.$kind.'/'.$experiment;
+        $directory = $root;
         while (strlen($directory) >= strlen(storage_path())) {
             if (is_link($directory)) {
                 throw new InvalidArgumentException('Research export paths must not contain symbolic links.');
@@ -41,18 +115,53 @@ final class ResearchFiles
             }
             $directory = $parent;
         }
-        $disk = Storage::build($settings);
-        $bundle = $kind.'/'.$experiment.'/'.Str::uuid();
-        $paths = [];
-        foreach ($files as $name => $content) {
-            if (! preg_match('/\A[a-z]+\.(?:json|jsonl|csv)\z/', $name)) {
-                throw new InvalidArgumentException('Invalid research export filename.');
+
+        return $settings;
+    }
+
+    private function assertNoSymlinkSegments(string $path): void
+    {
+        $root = config('filesystems.disks.thesis_research.root');
+        $normalizedRoot = is_string($root) ? rtrim(str_replace('\\', '/', $root), '/') : '';
+        $normalizedPath = str_replace('\\', '/', $path);
+        if ($normalizedRoot === '' || ! str_starts_with($normalizedPath, $normalizedRoot.'/')) {
+            throw new InvalidArgumentException('Research export path is outside private storage.');
+        }
+        $candidate = $normalizedRoot;
+        foreach (explode('/', substr($normalizedPath, strlen($normalizedRoot) + 1)) as $segment) {
+            $candidate .= DIRECTORY_SEPARATOR.$segment;
+            if (is_link($candidate)) {
+                throw new InvalidArgumentException('Research export paths must not contain symbolic links.');
             }
-            $disk->put($bundle.'/'.$name, $content, 'private');
-            $paths[$name] = $disk->path($bundle.'/'.$name);
+        }
+    }
+
+    private function safePath(string $path): ?string
+    {
+        $root = config('filesystems.disks.thesis_research.root');
+        $realRoot = is_string($root) ? realpath($root) : false;
+        if ($realRoot === false || ! str_starts_with(str_replace('\\', '/', $path), rtrim(str_replace('\\', '/', $realRoot), '/').'/')) {
+            throw new InvalidArgumentException('Research export path is outside private storage.');
+        }
+        $relative = substr(str_replace('\\', '/', $path), strlen(rtrim(str_replace('\\', '/', $realRoot), '/')) + 1);
+        $candidate = $realRoot;
+        foreach (explode('/', $relative) as $segment) {
+            $candidate .= DIRECTORY_SEPARATOR.$segment;
+            if (is_link($candidate)) {
+                throw new InvalidArgumentException('Research export paths must not contain symbolic links.');
+            }
+        }
+        $realPath = realpath($path);
+        if ($realPath === false || ! is_file($realPath)) {
+            return null;
+        }
+        $prefix = rtrim($realRoot, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
+        if (! str_starts_with(PHP_OS_FAMILY === 'Windows' ? strtolower($realPath) : $realPath,
+            PHP_OS_FAMILY === 'Windows' ? strtolower($prefix) : $prefix)) {
+            throw new InvalidArgumentException('Research export path is outside private storage.');
         }
 
-        return $paths;
+        return $realPath;
     }
 
     /** @param list<array<string, mixed>> $rows */

@@ -62,6 +62,7 @@ class ExperimentController extends Controller
     public function show(Project $project, ResearchExperiment $experiment): Response
     {
         $this->authorizeExperiment($project, $experiment);
+        $resultsUnlocked = $experiment->getAttribute('results_unlocked_at') !== null;
         $heartbeat = $experiment->getAttribute('heartbeat_at');
         if ($experiment->status === 'running' && is_string($heartbeat) && Carbon::parse($heartbeat)->lt(now()->subMinutes(27))) {
             $experiment->forceFill(['status' => 'interrupted', 'safe_error' => __('ui.research.experiment_interrupted'), 'finished_at' => now()])->save();
@@ -70,15 +71,18 @@ class ExperimentController extends Controller
 
         return Inertia::render('projects/research/experiments/show', [
             'project' => $project->only(['id', 'name']), 'experiment' => $this->summary($experiment),
-            'failures' => $experiment->experiment_identity === null ? [] : ThesisExperimentAttempt::query()
+            'failures' => ! $resultsUnlocked || $experiment->experiment_identity === null ? [] : ThesisExperimentAttempt::query()
                 ->where('project_id', $project->id)->where('experiment_key', $experiment->experiment_identity)
                 ->whereIn('status', ['failed', 'incomplete'])->latest('id')->limit(50)
                 ->get(['id', 'question_id', 'requested_model', 'method', 'repetition_index', 'status'])
                 ->map(fn (ThesisExperimentAttempt $attempt): array => $attempt->only(['id', 'question_id', 'requested_model', 'method', 'repetition_index', 'status'])),
-            'configuration' => ['protocol' => config('thesis.protocol_version'), 'models' => config('thesis.models'), 'methods' => config('thesis.methods')],
+            'configuration' => $resultsUnlocked ? ['protocol' => config('thesis.protocol_version'),
+                'models' => config('thesis.models'), 'methods' => config('thesis.methods')] : null,
             'endpoints' => ['index' => route('projects.research.experiments.index', $project),
                 'start' => route('projects.research.experiments.start', [$project, $experiment]),
-                'resume' => route('projects.research.experiments.resume', [$project, $experiment])],
+                'resume' => route('projects.research.experiments.resume', [$project, $experiment]),
+                'evaluation' => route('projects.research.experiments.evaluation', [$project, $experiment]),
+                'results' => route('projects.research.experiments.results', [$project, $experiment])],
         ]);
     }
 
@@ -106,7 +110,8 @@ class ExperimentController extends Controller
         $this->authorizeExperiment($project, $experiment);
         $identity = DB::transaction(function () use ($experiment): string {
             $locked = ResearchExperiment::query()->lockForUpdate()->findOrFail($experiment->id);
-            if (! in_array($locked->status, ['partially_completed', 'interrupted'], true) || $locked->manual_retry_rounds >= 2) {
+            if (! in_array($locked->status, ['partially_completed', 'interrupted'], true) || $locked->manual_retry_rounds >= 2
+                || $locked->getAttribute('results_unlocked_at') !== null) {
                 throw ValidationException::withMessages(['experiment' => __('ui.research.experiment_not_resumable')]);
             }
             $identity = (string) Str::uuid();

@@ -59,6 +59,7 @@ class RunResearchExperimentBatchJob implements ShouldBeUnique, ShouldQueue
         if (! $claimed) {
             return;
         }
+        $experiment->refresh();
         try {
             $dataset = ResearchDataset::query()->findOrFail($experiment->research_dataset_id);
             $disk = Storage::disk('thesis_research');
@@ -96,7 +97,7 @@ class RunResearchExperimentBatchJob implements ShouldBeUnique, ShouldQueue
                 'pending_cases' => $result['pending'], 'skipped_cases' => $result['skipped'], 'heartbeat_at' => now(), 'safe_error' => null])->save();
             if ($result['pending'] > 0 && $result['model_provenance_verified']) {
                 $next = $this->batchNumber + 1;
-                $experiment->forceFill(['batch_number' => $next])->save();
+                $experiment->forceFill(['batch_number' => $next, 'status' => 'queued'])->save();
                 self::dispatch($experiment->id, $this->executionIdentity, $next)->onConnection('redis')->onQueue('research');
             } else {
                 $complete = $result['failed'] === 0 && $result['incomplete'] === 0 && $result['completed'] === $result['total']

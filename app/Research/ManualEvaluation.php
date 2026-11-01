@@ -36,6 +36,77 @@ final class ManualEvaluation
         return ThesisExperimentAttempt::query()->where('experiment_key', $experiment)->orderBy('id')->get();
     }
 
+    /**
+     * @param  list<string>  $eligibleIds  Canonical successful attempts selected by ExportResults.
+     * @return list<array<string, mixed>>
+     */
+    public function blindAnswers(string $experiment, int $seed, array $eligibleIds): array
+    {
+        $allowed = array_fill_keys($eligibleIds, true);
+        $attempts = $this->attempts($experiment)->where('status', 'successful')
+            ->filter(fn (ThesisExperimentAttempt $attempt): bool => isset($allowed[$this->identifier($attempt)]));
+        $grades = ThesisAnswerEvaluation::query()->whereIn('thesis_experiment_attempt_id', $attempts->modelKeys())->get()
+            ->keyBy('thesis_experiment_attempt_id');
+        $rows = [];
+        foreach ($attempts as $attempt) {
+            $details = $attempt->details();
+            $grade = $grades->get($attempt->id);
+            $rows[] = ['evaluation_id' => $this->identifier($attempt), 'rubric_version' => self::RUBRIC,
+                'question' => $details['dataset_question']['question'], 'reference_answer' => $details['dataset_question']['reference_answer'],
+                'required_facts' => $details['dataset_question']['required_facts'], 'answer' => $details['inference']['answer'],
+                'correctness' => $grade?->correctness, 'fact_coverage' => $grade?->details()['fact_coverage'],
+                'notes' => $grade?->details()['notes']];
+        }
+        usort($rows, fn (array $a, array $b): int => strcmp(hash('sha256', $seed.':'.$a['evaluation_id']), hash('sha256', $seed.':'.$b['evaluation_id'])));
+
+        return $rows;
+    }
+
+    /**
+     * @param  list<string>  $eligibleIds
+     * @param  list<mixed>  $factCoverage
+     * @return array{saved: bool, already_present: bool}
+     */
+    public function save(string $experiment, array $eligibleIds, string $evaluationId, int $correctness,
+        array $factCoverage, int $reviewerId, string $notes = ''): array
+    {
+        if (! in_array($correctness, [0, 1, 2], true) || ! preg_match('/\A[a-f0-9]{64}\z/', $evaluationId)
+            || ! in_array($evaluationId, $eligibleIds, true)) {
+            throw new InvalidArgumentException('Evaluation identifier or correctness score is invalid.');
+        }
+        $attempt = $this->attempts($experiment)->first(fn (ThesisExperimentAttempt $candidate): bool => $candidate->status === 'successful' && hash_equals($this->identifier($candidate), $evaluationId));
+        if ($attempt === null) {
+            throw new InvalidArgumentException('Evaluation identifier is not an eligible successful answer.');
+        }
+        $facts = $attempt->details()['dataset_question']['required_facts'] ?? null;
+        if (! is_array($facts) || $facts === [] || count($factCoverage) !== count($facts)
+            || array_filter($factCoverage, fn (mixed $value): bool => ! is_bool($value)) !== [] || mb_strlen($notes) > 8000) {
+            throw new InvalidArgumentException('Each required fact needs exactly one boolean decision.');
+        }
+        $payload = ['fact_coverage' => $factCoverage, 'reviewer' => 'user:'.$reviewerId, 'notes' => $notes];
+
+        try {
+            return DB::transaction(function () use ($attempt, $evaluationId, $correctness, $payload): array {
+                $saved = ThesisAnswerEvaluation::query()->where('thesis_experiment_attempt_id', $attempt->id)->lockForUpdate()->first();
+                if ($saved !== null) {
+                    if ($saved->evaluation_id !== $evaluationId || $saved->rubric_version !== self::RUBRIC
+                        || $saved->correctness !== $correctness || $saved->details() !== $payload) {
+                        throw new InvalidArgumentException('Conflicting evaluation exists; grades were not overwritten.');
+                    }
+
+                    return ['saved' => false, 'already_present' => true];
+                }
+                ThesisAnswerEvaluation::forceCreate(['thesis_experiment_attempt_id' => $attempt->id,
+                    'evaluation_id' => $evaluationId, 'rubric_version' => self::RUBRIC,
+                    'correctness' => $correctness, 'payload' => $payload]);
+
+                return ['saved' => true, 'already_present' => false];
+            });
+        } catch (UniqueConstraintViolationException) {
+            throw new InvalidArgumentException('Concurrent evaluation submission rejected; reload and review the saved grade.');
+        }
+    }
+
     /** @return array<string, mixed> */
     public function export(string $experiment, int $seed): array
     {
@@ -43,18 +114,10 @@ final class ManualEvaluation
         if ($attempts->isEmpty()) {
             throw new InvalidArgumentException('Experiment has no stored attempts.');
         }
-        $rows = [];
-        foreach ($attempts as $attempt) {
-            if ($attempt->status !== 'successful') {
-                continue;
-            }
-            $details = $attempt->details();
-            $rows[] = ['evaluation_id' => $this->identifier($attempt), 'rubric_version' => self::RUBRIC,
-                'question' => $details['dataset_question']['question'], 'reference_answer' => $details['dataset_question']['reference_answer'],
-                'required_facts' => $details['dataset_question']['required_facts'], 'answer' => $details['inference']['answer']];
-        }
-        // Only opaque identifiers influence the ordering; no case order or grouping is exposed.
-        usort($rows, fn (array $a, array $b): int => strcmp(hash('sha256', $seed.':'.$a['evaluation_id']), hash('sha256', $seed.':'.$b['evaluation_id'])));
+        $rows = $this->blindAnswers($experiment, $seed, $attempts->where('status', 'successful')->map(fn (ThesisExperimentAttempt $attempt): string => $this->identifier($attempt))->values()->all());
+        $rows = array_map(fn (array $row): array => array_intersect_key($row, array_flip([
+            'evaluation_id', 'rubric_version', 'question', 'reference_answer', 'required_facts', 'answer',
+        ])), $rows);
         $raw = implode("\n", array_map(fn (array $row): string => json_encode($row, ResearchFiles::JSON_FLAGS), $rows));
 
         return ['exported' => count($rows), 'excluded_non_successful' => $attempts->count() - count($rows),

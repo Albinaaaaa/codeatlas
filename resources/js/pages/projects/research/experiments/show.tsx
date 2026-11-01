@@ -31,7 +31,11 @@ type Experiment = {
 type Props = {
     project: ResearchProject;
     experiment: Experiment;
-    configuration: { protocol: string; models: string[]; methods: string[] };
+    configuration: {
+        protocol: string;
+        models: string[];
+        methods: string[];
+    } | null;
     failures: {
         id: number;
         question_id: string;
@@ -40,7 +44,13 @@ type Props = {
         repetition_index: number;
         status: string;
     }[];
-    endpoints: { index: string; start: string; resume: string };
+    endpoints: {
+        index: string;
+        start: string;
+        resume: string;
+        evaluation: string;
+        results: string;
+    };
 };
 
 export default function ExperimentShow({
@@ -102,6 +112,16 @@ export default function ExperimentShow({
                         <Badge variant="outline">
                             {t('research.status_' + experiment.status)}
                         </Badge>
+                        <Button variant="outline" asChild>
+                            <Link href={endpoints.evaluation}>
+                                {t('research.evaluation')}
+                            </Link>
+                        </Button>
+                        <Button variant="outline" asChild>
+                            <Link href={endpoints.results}>
+                                {t('research.results')}
+                            </Link>
+                        </Button>
                         <Button variant="outline" asChild>
                             <Link href={endpoints.index}>
                                 {t('research.back')}
@@ -223,43 +243,45 @@ export default function ExperimentShow({
                         </CardContent>
                     </Card>
                 )}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>
-                            {t('research.experiment_configuration')}
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2 text-sm">
-                        <p>
-                            {t('research.protocol')}:{' '}
-                            <span className="font-mono">
-                                {configuration.protocol}
-                            </span>
-                        </p>
-                        <p>
-                            {t('research.repetitions')}:{' '}
-                            {experiment.repetitions}
-                        </p>
-                        <p>
-                            {t('research.models')}:{' '}
-                            <span className="font-mono">
-                                {configuration.models.join(', ')}
-                            </span>
-                        </p>
-                        <p>
-                            {t('research.methods')}:{' '}
-                            <span className="font-mono">
-                                {configuration.methods.join(', ')}
-                            </span>
-                        </p>
-                        <p className="break-all">
-                            SHA-256:{' '}
-                            <span className="font-mono">
-                                {experiment.dataset_sha256}
-                            </span>
-                        </p>
-                    </CardContent>
-                </Card>
+                {configuration && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>
+                                {t('research.experiment_configuration')}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2 text-sm">
+                            <p>
+                                {t('research.protocol')}:{' '}
+                                <span className="font-mono">
+                                    {configuration.protocol}
+                                </span>
+                            </p>
+                            <p>
+                                {t('research.repetitions')}:{' '}
+                                {experiment.repetitions}
+                            </p>
+                            <p>
+                                {t('research.models')}:{' '}
+                                <span className="font-mono">
+                                    {configuration.models.join(', ')}
+                                </span>
+                            </p>
+                            <p>
+                                {t('research.methods')}:{' '}
+                                <span className="font-mono">
+                                    {configuration.methods.join(', ')}
+                                </span>
+                            </p>
+                            <p className="break-all">
+                                SHA-256:{' '}
+                                <span className="font-mono">
+                                    {experiment.dataset_sha256}
+                                </span>
+                            </p>
+                        </CardContent>
+                    </Card>
+                )}
             </main>
         </>
     );

@@ -6,8 +6,10 @@ use App\Http\Controllers\LocalProjectSourceController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectScanController;
 use App\Http\Controllers\Research\DatasetController;
+use App\Http\Controllers\Research\EvaluationController;
 use App\Http\Controllers\Research\EvidenceController;
 use App\Http\Controllers\Research\ExperimentController;
+use App\Http\Controllers\Research\ResultsController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
@@ -43,6 +45,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('{experiment}', [ExperimentController::class, 'show'])->name('show');
         Route::post('{experiment}/start', [ExperimentController::class, 'start'])->name('start');
         Route::post('{experiment}/resume', [ExperimentController::class, 'resume'])->name('resume');
+        Route::get('{experiment}/evaluation', [EvaluationController::class, 'show'])->name('evaluation');
+        Route::post('{experiment}/evaluation', [EvaluationController::class, 'store'])->name('evaluation.store');
+        Route::get('{experiment}/results', [ResultsController::class, 'show'])->name('results');
+        Route::post('{experiment}/exports', [ResultsController::class, 'export'])->name('exports.store');
+        Route::get('{experiment}/exports/{bundle}/{file}', [ResultsController::class, 'download'])
+            ->where('file', '[A-Za-z0-9.]+')->name('exports.download');
     });
 
     Route::get('projects/{project}/sources/local/directories', LocalDirectoryBrowserController::class)
