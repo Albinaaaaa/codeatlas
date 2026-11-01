@@ -65,12 +65,17 @@ export default function ExperimentResults({
     return (
         <>
             <Head title={`${t('research.results')} · ${project.name}`} />
-            <main className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+            <main className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-6">
                 <header className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            {t('research.results')}
-                        </h1>
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <h1 className="text-2xl font-semibold tracking-tight break-words">
+                                {t('research.results')}
+                            </h1>
+                            <Badge variant="secondary">
+                                {t('research.results_type')}
+                            </Badge>
+                        </div>
                         <p className="text-sm text-muted-foreground">
                             {t('research.experiment')} #{experiment.id}
                         </p>
@@ -88,6 +93,9 @@ export default function ExperimentResults({
                         <AlertDescription>{safe_error}</AlertDescription>
                     </Alert>
                 )}
+                <p className="max-w-3xl text-sm text-muted-foreground">
+                    {t('research.results_help')}
+                </p>
                 {locked ? (
                     <>
                         <Card>
@@ -165,7 +173,7 @@ export default function ExperimentResults({
                         <Card>
                             <CardHeader>
                                 <div className="flex flex-wrap items-center justify-between gap-3">
-                                    <CardTitle>
+                                    <CardTitle className="min-w-0">
                                         {t('research.comparison_table')}
                                     </CardTitle>
                                     <Form
@@ -232,10 +240,10 @@ export default function ExperimentResults({
                                                     key={`${group.model}-${group.method}`}
                                                     className="border-b align-top"
                                                 >
-                                                    <th className="p-2 font-mono font-normal">
+                                                    <th className="p-2 font-mono font-normal break-all">
                                                         {group.model}
                                                     </th>
-                                                    <td className="p-2 font-mono">
+                                                    <td className="p-2 font-mono break-all">
                                                         {group.method}
                                                     </td>
                                                     <td className="p-2">
@@ -360,6 +368,9 @@ export default function ExperimentResults({
                                 </div>
                                 <p className="mt-3 text-xs text-muted-foreground">
                                     {t('research.actual_metrics_note')}
+                                </p>
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                    {t('research.duration_help')}
                                 </p>
                             </CardContent>
                         </Card>

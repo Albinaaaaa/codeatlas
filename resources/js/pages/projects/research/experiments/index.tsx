@@ -57,13 +57,21 @@ export default function ExperimentsIndex({
     return (
         <>
             <Head title={t('research.experiments') + ' · ' + project.name} />
-            <main className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-                <header>
-                    <h1 className="text-2xl font-semibold tracking-tight">
-                        {t('research.experiments')}
-                    </h1>
+            <main className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-6">
+                <header className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <h1 className="text-2xl font-semibold tracking-tight break-words">
+                            {t('research.experiments')}
+                        </h1>
+                        <Badge variant="secondary">
+                            {t('research.experiment_type')}
+                        </Badge>
+                    </div>
                     <p className="text-sm text-muted-foreground">
                         {t('research.experiment_description')}
+                    </p>
+                    <p className="mt-2 max-w-3xl text-xs text-muted-foreground">
+                        {t('research.experiment_help')}
                     </p>
                 </header>
                 <Card>
@@ -72,7 +80,7 @@ export default function ExperimentsIndex({
                             {t('research.prepare_experiment')}
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
+                    <CardContent className="min-w-0 space-y-4">
                         {datasets.length === 0 ? (
                             <p className="text-sm text-muted-foreground">
                                 {t('research.no_frozen_datasets')}
@@ -81,7 +89,7 @@ export default function ExperimentsIndex({
                             <Form
                                 action={endpoints.store}
                                 method="post"
-                                className="max-w-3xl space-y-4"
+                                className="max-w-3xl min-w-0 space-y-4"
                             >
                                 {({ processing, errors }) => (
                                     <>
@@ -104,6 +112,7 @@ export default function ExperimentsIndex({
                                                 <SelectContent>
                                                     {datasets.map((dataset) => (
                                                         <SelectItem
+                                                            className="break-all"
                                                             key={dataset.id}
                                                             value={String(
                                                                 dataset.id,
@@ -126,8 +135,8 @@ export default function ExperimentsIndex({
                                             />
                                         </div>
                                         {selected && (
-                                            <div className="rounded-md border p-3 text-sm">
-                                                <p>
+                                            <div className="min-w-0 rounded-md border p-3 text-sm">
+                                                <p className="break-words">
                                                     {t('research.revision')}:{' '}
                                                     {selected.revision}
                                                 </p>
@@ -205,9 +214,33 @@ export default function ExperimentsIndex({
                                                       repetitions
                                                     : '—'}
                                             </p>
-                                            <p className="mt-2 text-muted-foreground">
+                                            <p className="mt-2 break-words text-muted-foreground">
                                                 {t('research.matrix_help')}
                                             </p>
+                                            <details className="text-xs text-muted-foreground">
+                                                <summary className="cursor-pointer font-medium">
+                                                    {t(
+                                                        'research.technical_terms',
+                                                    )}
+                                                </summary>
+                                                <div className="mt-2 space-y-2">
+                                                    <p>
+                                                        {t(
+                                                            'research.chunks_help',
+                                                        )}
+                                                    </p>
+                                                    <p>
+                                                        {t(
+                                                            'research.retrieval_help',
+                                                        )}
+                                                    </p>
+                                                    <p>
+                                                        {t(
+                                                            'research.context_help',
+                                                        )}
+                                                    </p>
+                                                </div>
+                                            </details>
                                         </div>
                                         <Button disabled={processing}>
                                             {processing && (
@@ -234,9 +267,9 @@ export default function ExperimentsIndex({
                     ) : (
                         experiments.map((experiment) => (
                             <Card key={experiment.id}>
-                                <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
-                                    <div>
-                                        <p className="font-medium">
+                                <CardContent className="flex min-w-0 flex-wrap items-center justify-between gap-3 pt-6">
+                                    <div className="min-w-0">
+                                        <p className="font-medium break-words">
                                             {experiment.dataset.name} ·{' '}
                                             {experiment.dataset.version}
                                         </p>

@@ -96,19 +96,24 @@ export default function ExperimentShow({
             <Head
                 title={`${t('research.experiment')} #${experiment.id} · ${project.name}`}
             />
-            <main className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+            <main className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-6">
                 <header className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            {t('research.experiment')} #{experiment.id}
-                        </h1>
-                        <p className="text-sm text-muted-foreground">
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <h1 className="text-2xl font-semibold tracking-tight break-words">
+                                {t('research.experiment')} #{experiment.id}
+                            </h1>
+                            <Badge variant="secondary">
+                                {t('research.experiment_type')}
+                            </Badge>
+                        </div>
+                        <p className="text-sm break-words text-muted-foreground">
                             {experiment.dataset.name} ·{' '}
                             {experiment.dataset.version} ·{' '}
                             {experiment.dataset.revision}
                         </p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         <Badge variant="outline">
                             {t('research.status_' + experiment.status)}
                         </Badge>
@@ -143,13 +148,16 @@ export default function ExperimentShow({
                         </AlertDescription>
                     </Alert>
                 )}
+                <p className="max-w-3xl text-xs text-muted-foreground">
+                    {t('research.experiment_help')}
+                </p>
                 <Card>
                     <CardHeader>
                         <CardTitle>
                             {t('research.experiment_progress')}
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
+                    <CardContent className="min-w-0 space-y-4">
                         <div className="h-2 overflow-hidden rounded-full bg-muted">
                             <div
                                 className="h-full bg-primary transition-all"
@@ -222,15 +230,17 @@ export default function ExperimentShow({
                             {failures.map((failure) => (
                                 <div
                                     key={failure.id}
-                                    className="flex flex-wrap gap-x-3 gap-y-1 border-b pb-2 text-sm last:border-0"
+                                    className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 border-b pb-2 text-sm last:border-0"
                                 >
-                                    <span className="font-mono">
+                                    <span className="font-mono break-all">
                                         {failure.question_id}
                                     </span>
-                                    <span className="font-mono">
+                                    <span className="font-mono break-all">
                                         {failure.requested_model}
                                     </span>
-                                    <span>{failure.method}</span>
+                                    <span className="break-words">
+                                        {failure.method}
+                                    </span>
                                     <span>
                                         {t('research.repetition')}{' '}
                                         {failure.repetition_index}
@@ -250,10 +260,10 @@ export default function ExperimentShow({
                                 {t('research.experiment_configuration')}
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-2 text-sm">
+                        <CardContent className="min-w-0 space-y-2 text-sm">
                             <p>
                                 {t('research.protocol')}:{' '}
-                                <span className="font-mono">
+                                <span className="font-mono break-all">
                                     {configuration.protocol}
                                 </span>
                             </p>
@@ -263,13 +273,13 @@ export default function ExperimentShow({
                             </p>
                             <p>
                                 {t('research.models')}:{' '}
-                                <span className="font-mono">
+                                <span className="font-mono break-all">
                                     {configuration.models.join(', ')}
                                 </span>
                             </p>
                             <p>
                                 {t('research.methods')}:{' '}
-                                <span className="font-mono">
+                                <span className="font-mono break-all">
                                     {configuration.methods.join(', ')}
                                 </span>
                             </p>

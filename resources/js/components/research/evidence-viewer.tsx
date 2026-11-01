@@ -91,7 +91,7 @@ throw new Error('Invalid evidence response');
             )}
             {!disabled && source && (
                 <div className="overflow-x-auto rounded-md border bg-muted/30 p-3">
-                    <p className="mb-2 font-mono text-xs text-muted-foreground">
+                    <p className="mb-2 break-all font-mono text-xs text-muted-foreground">
                         {source.path}:{source.start_line}–{source.end_line}
                     </p>
                     <pre className="text-xs leading-6">

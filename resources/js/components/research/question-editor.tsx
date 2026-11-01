@@ -54,10 +54,10 @@ export default function QuestionEditor({
     const prefix = 'question-' + position + '-';
 
     return (
-        <Card id={'question-' + position}>
+        <Card id={'question-' + position} className="min-w-0">
             <CardHeader>
                 <CardTitle className="flex flex-wrap items-center gap-3">
-                    <span>
+                    <span className="min-w-0 break-words">
                         {position + 1}.{' '}
                         {question.question_id || t('research.question')}
                     </span>
@@ -144,10 +144,15 @@ export default function QuestionEditor({
                                         }
                                     />
                                     <InputError message={form.errors[field]} />
+                                    {field === 'reference_answer' && (
+                                        <p className="text-xs text-muted-foreground">
+                                            {t('research.reference_help')}
+                                        </p>
+                                    )}
                                 </div>
                             ),
                         )}
-                        <div className="space-y-2">
+                        <div className="min-w-0 space-y-2">
                             <Label htmlFor={prefix + 'facts'}>
                                 {t('research.required_facts')}
                             </Label>
@@ -172,11 +177,11 @@ export default function QuestionEditor({
                     {form.data.evidence.map((item, i) => (
                         <div
                             key={i}
-                            className="space-y-3 rounded-md border p-3"
+                            className="min-w-0 space-y-3 rounded-md border p-3"
                         >
                             <fieldset
                                 disabled={frozen || form.processing}
-                                className="grid gap-3 sm:grid-cols-[1fr_7rem_7rem_auto]"
+                                className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_7rem_7rem_auto]"
                             >
                                 {(
                                     ['path', 'start_line', 'end_line'] as const

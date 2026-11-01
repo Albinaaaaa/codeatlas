@@ -53,12 +53,17 @@ export default function EvaluateExperiment({
     return (
         <>
             <Head title={`${t('research.evaluation')} · ${project.name}`} />
-            <main className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+            <main className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-6">
                 <header className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            {t('research.evaluation')}
-                        </h1>
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <h1 className="text-2xl font-semibold tracking-tight break-words">
+                                {t('research.evaluation')}
+                            </h1>
+                            <Badge variant="secondary">
+                                {t('research.evaluation_type')}
+                            </Badge>
+                        </div>
                         <p className="text-sm text-muted-foreground">
                             {t('research.experiment')} #{experiment.id}
                         </p>
@@ -74,6 +79,9 @@ export default function EvaluateExperiment({
                         <AlertDescription>{safe_error}</AlertDescription>
                     </Alert>
                 )}
+                <p className="max-w-3xl text-sm text-muted-foreground">
+                    {t('research.evaluation_help')}
+                </p>
                 <Card>
                     <CardHeader>
                         <CardTitle>
@@ -159,12 +167,12 @@ function EvaluationCard({
         form.data.fact_coverage.every((value) => value !== null);
 
     return (
-        <Card>
+        <Card className="min-w-0">
             <CardHeader>
                 <CardTitle className="text-base">
                     {t('research.blind_answer')}
                 </CardTitle>
-                <p className="font-mono text-xs text-muted-foreground">
+                <p className="font-mono text-xs break-all text-muted-foreground">
                     {answer.evaluation_id.slice(0, 12)} · {t('research.rubric')}{' '}
                     {answer.rubric_version}
                 </p>
@@ -174,7 +182,7 @@ function EvaluationCard({
                     <h2 className="text-sm font-medium">
                         {t('research.question')}
                     </h2>
-                    <p className="text-sm whitespace-pre-wrap">
+                    <p className="text-sm break-words whitespace-pre-wrap">
                         {answer.question}
                     </p>
                 </section>
@@ -182,7 +190,7 @@ function EvaluationCard({
                     <h2 className="text-sm font-medium">
                         {t('research.verified_reference_answer')}
                     </h2>
-                    <p className="text-sm whitespace-pre-wrap">
+                    <p className="text-sm break-words whitespace-pre-wrap">
                         {answer.reference_answer}
                     </p>
                 </section>
@@ -239,7 +247,7 @@ function EvaluationCard({
                     <h2 className="text-sm font-medium">
                         {t('research.generated_answer')}
                     </h2>
-                    <pre className="max-h-[32rem] overflow-auto rounded-md border bg-muted/40 p-4 font-mono text-sm whitespace-pre-wrap">
+                    <pre className="max-h-[32rem] overflow-auto rounded-md border bg-muted/40 p-4 font-mono text-sm break-words whitespace-pre-wrap">
                         {answer.answer}
                     </pre>
                 </section>

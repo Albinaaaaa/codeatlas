@@ -43,15 +43,23 @@ export default function DatasetsIndex({
     return (
         <>
             <Head title={t('research.datasets') + ' · ' + project.name} />
-            <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-                <div>
-                    <h1 className="text-2xl font-semibold tracking-tight">
-                        {t('research.datasets')}
-                    </h1>
-                    <p className="text-sm text-muted-foreground">
+            <div className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-6">
+                <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <h1 className="text-2xl font-semibold tracking-tight break-words">
+                            {t('research.datasets')}
+                        </h1>
+                        <Badge variant="secondary">
+                            {t('research.dataset_type')}
+                        </Badge>
+                    </div>
+                    <p className="max-w-3xl text-sm text-muted-foreground">
                         {t('research.description')}
                     </p>
-                    <Button variant="outline" asChild>
+                    <p className="mt-2 max-w-3xl text-xs text-muted-foreground">
+                        {t('research.dataset_help')}
+                    </p>
+                    <Button className="mt-3" variant="outline" asChild>
                         <Link href={endpoints.experiments}>
                             {t('research.experiments')}
                         </Link>

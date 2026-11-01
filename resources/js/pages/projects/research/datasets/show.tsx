@@ -35,20 +35,23 @@ export default function DatasetShow({ project, dataset, endpoints }: Props) {
     return (
         <>
             <Head title={dataset.dataset_id + ' · ' + project.name} />
-            <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="space-y-2">
-                        <h1 className="text-2xl font-semibold tracking-tight">
+            <div className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-6">
+                <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
+                    <div className="min-w-0 space-y-2">
+                        <h1 className="text-2xl font-semibold tracking-tight break-words">
                             {dataset.dataset_id} · {dataset.dataset_version}
                         </h1>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                             <Badge>{t('research.' + dataset.status)}</Badge>
+                            <Badge variant="secondary">
+                                {t('research.dataset_type')}
+                            </Badge>
                             <Badge variant="outline">
                                 {t('research.' + dataset.split)}
                             </Badge>
                         </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         <Button variant="outline" asChild>
                             <Link href={endpoints.experiments}>
                                 {t('research.experiments')}
@@ -62,7 +65,10 @@ export default function DatasetShow({ project, dataset, endpoints }: Props) {
                     </div>
                 </div>
                 <Card>
-                    <CardContent className="space-y-3 pt-6">
+                    <CardContent className="min-w-0 space-y-3 pt-6">
+                        <p className="text-xs text-muted-foreground">
+                            {t('research.dataset_help')}
+                        </p>
                         <div>
                             <h2 className="text-sm font-medium">
                                 {t('research.revision')}

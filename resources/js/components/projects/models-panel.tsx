@@ -1,3 +1,4 @@
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { useTranslations } from '@/hooks/use-translations';
 import type { LaravelModelSummary } from '@/types/laravel-model';
@@ -11,14 +12,19 @@ export default function ModelsPanel({
 
     return (
         <Card>
-            <CardContent className="space-y-4 pt-6">
-                <div>
-                    <h2 className="font-medium">
-                        {t('projects.models.title')}
-                    </h2>
-                    <p className="text-sm text-muted-foreground">
-                        {t('projects.models.description')}
-                    </p>
+            <CardContent className="min-w-0 space-y-4 pt-6">
+                <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <h2 className="font-medium">
+                            {t('projects.models.title')}
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                            {t('projects.models.description')}
+                        </p>
+                    </div>
+                    <Badge variant="secondary">
+                        {t('projects.analysis.deterministic_badge')}
+                    </Badge>
                 </div>
                 {models.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
@@ -28,7 +34,7 @@ export default function ModelsPanel({
                     models.map((model) => (
                         <details
                             key={model.id}
-                            className="rounded-md border p-4"
+                            className="min-w-0 rounded-md border p-4"
                         >
                             <summary className="cursor-pointer font-mono text-sm break-all">
                                 {model.class}
@@ -38,7 +44,7 @@ export default function ModelsPanel({
                                 </span>
                             </summary>
                             <div className="mt-4 space-y-4">
-                                <p className="font-mono text-xs text-muted-foreground">
+                                <p className="font-mono text-xs break-all text-muted-foreground">
                                     {model.source_path}:{model.start_line}–
                                     {model.end_line}
                                 </p>
@@ -72,7 +78,7 @@ export default function ModelsPanel({
                                     </p>
                                 ) : (
                                     <div className="overflow-x-auto rounded-md border">
-                                        <table className="w-full text-left text-sm">
+                                        <table className="w-full min-w-[48rem] text-left text-sm">
                                             <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
                                                 <tr>
                                                     {[
@@ -101,12 +107,12 @@ export default function ModelsPanel({
                                                             <td className="px-3 py-2 align-top">
                                                                 {relation.name}
                                                             </td>
-                                                            <td className="px-3 py-2 align-top font-mono text-xs">
+                                                            <td className="px-3 py-2 align-top font-mono text-xs break-all">
                                                                 {
                                                                     relation.relation_type
                                                                 }
                                                             </td>
-                                                            <td className="px-3 py-2 align-top font-mono text-xs">
+                                                            <td className="px-3 py-2 align-top font-mono text-xs break-all">
                                                                 {relation.related_model ===
                                                                 '*'
                                                                     ? t(
@@ -114,7 +120,7 @@ export default function ModelsPanel({
                                                                       )
                                                                     : relation.related_model}
                                                             </td>
-                                                            <td className="px-3 py-2 align-top font-mono text-xs">
+                                                            <td className="px-3 py-2 align-top font-mono text-xs break-all">
                                                                 {Object.entries(
                                                                     relation.arguments,
                                                                 )
@@ -167,6 +173,9 @@ export default function ModelsPanel({
                                         </table>
                                     </div>
                                 )}
+                                <p className="text-xs text-muted-foreground">
+                                    {t('projects.analysis.relationship_help')}
+                                </p>
                             </div>
                         </details>
                     ))
