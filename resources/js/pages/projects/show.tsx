@@ -91,6 +91,11 @@ export default function ProjectsShow({
                         </Link>
                     </Button>
                     <Button variant="outline" asChild>
+                        <Link href={show(project.id).url + '/ask'}>
+                            {t('ask.title')}
+                        </Link>
+                    </Button>
+                    <Button variant="outline" asChild>
                         <Link href={index()}>{t('projects.show.back')}</Link>
                     </Button>
                 </div>

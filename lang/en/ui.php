@@ -1,6 +1,27 @@
 <?php
 
 return [
+    'ask' => [
+        'title' => 'Ask CodeAtlas', 'description' => 'Ask a question about the indexed source code in :project.',
+        'help' => 'CodeAtlas retrieves source fragments deterministically and uses the selected local Qwen model to generate an answer. Review the cited fragments; they are context, not proof.',
+        'back_to_project' => 'Project overview', 'new_question' => 'Ask a question', 'revision' => 'Indexed revision',
+        'select_revision' => 'Select a revision', 'fingerprint' => 'Snapshot fingerprint', 'no_revisions' => 'No indexed revisions are available yet.',
+        'open_indexing' => 'Open project overview', 'model' => 'Local Qwen model', 'retrieval' => 'Retrieval strategy',
+        'question' => 'Question', 'question_placeholder' => 'Ask about the code structure or implementation…',
+        'question_required' => 'Enter a question.', 'choose_revision' => 'Select an indexed revision.',
+        'submit' => 'Ask CodeAtlas', 'retry' => 'Retry submission', 'start_new' => 'Discard and start a new question',
+        'retry_same_submission' => 'The request may have reached the server. Retrying will reuse the same request key and question.',
+        'unexpected_response' => 'The server did not accept the question as expected.', 'error' => 'The request could not be completed. Try again.',
+        'history' => 'Recent questions', 'refresh' => 'Refresh', 'loading' => 'Loading…', 'loading_detail' => 'Opening answer…',
+        'empty_history' => 'No questions have been submitted for this project.', 'select_or_submit' => 'Submit a question or choose one from your history.',
+        'answer' => 'Generated answer', 'sources' => 'Source context', 'sources_help' => 'These exact source fragments were supplied to the model. They are not a correctness guarantee.',
+        'no_sources' => 'No source fragments were recorded.', 'metrics' => 'Inference metrics', 'input_tokens' => 'Actual input tokens',
+        'output_tokens' => 'Actual output tokens', 'inference_duration' => 'Model inference duration', 'wall_time' => 'End-to-end inference time',
+        'estimated_tokens' => 'Estimated prompt tokens (before inference)', 'created' => 'Submitted', 'stop_reason' => 'Completion reason',
+        'methods' => ['baseline' => 'Baseline', 'keyword' => 'Keyword', 'structure_aware' => 'Structure-aware'],
+        'status' => ['queued' => 'Queued', 'preparing' => 'Preparing', 'running' => 'Running', 'completed' => 'Completed', 'incomplete' => 'Incomplete', 'failed' => 'Failed'],
+        'status_help' => ['queued' => 'Waiting for the Ask worker.', 'preparing' => 'Preparing source chunks from the selected snapshot.', 'running' => 'The selected local model is generating an answer.'],
+    ],
     'research' => [
         'title' => 'Research',
         'datasets' => 'Research datasets',

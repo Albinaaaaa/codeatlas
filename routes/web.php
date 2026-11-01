@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AskCodeAtlas\AskPageController;
 use App\Http\Controllers\AskCodeAtlas\RepositoryQuestionController;
 use App\Http\Controllers\LocalDirectoryBrowserController;
 use App\Http\Controllers\LocaleController;
@@ -25,6 +26,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->only(['index', 'create', 'store', 'show']);
 
     Route::prefix('projects/{project}/ask')->name('projects.ask.')->group(function () {
+        Route::get('/', AskPageController::class)->name('page');
         Route::get('history', [RepositoryQuestionController::class, 'index'])->name('history');
         Route::post('/', [RepositoryQuestionController::class, 'store'])->name('store');
         Route::get('{question:public_id}', [RepositoryQuestionController::class, 'show'])->name('show');

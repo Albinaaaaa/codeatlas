@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Concerns\ResearchFixture;
 use Tests\RefreshDatabase;
 use Tests\TestCase;
@@ -140,6 +141,26 @@ class RepositoryQuestionTest extends TestCase
 
         $this->actingAs($project->owner)->getJson('/projects/'.$project->id.'/ask/history')
             ->assertOk()->assertJsonPath('revisions.0.id', $fixture['revision']->id)->assertJsonPath('questions', []);
+    }
+
+    public function test_ask_page_is_project_authorized_and_receives_backend_configuration(): void
+    {
+        config(['inertia.ssr.enabled' => false]);
+        $fixture = $this->researchFixture();
+        $project = $fixture['revision']->project;
+
+        $this->actingAs($project->owner)->get('/projects/'.$project->id.'/ask')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('projects/ask/index')
+                ->where('project.id', $project->id)
+                ->where('configuration.models', config('thesis.models'))
+                ->where('configuration.methods', config('thesis.methods'))
+                ->has('endpoints.history')
+                ->has('endpoints.store')
+                ->has('endpoints.detail'));
+
+        $this->actingAs(User::factory()->create())->get('/projects/'.$project->id.'/ask')->assertForbidden();
     }
 
     public function test_ollama_unavailable_is_saved_as_a_safe_failure(): void
