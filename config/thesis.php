@@ -26,7 +26,7 @@ return [
         'repeat_penalty' => 1.1,
     ],
     'inference' => [
-        'timeout_seconds' => (int) env('THESIS_OLLAMA_TIMEOUT', 300),
+        'timeout_seconds' => (int) env('THESIS_OLLAMA_TIMEOUT', 600),
         'connect_timeout_seconds' => 3,
     ],
     'repetitions' => (int) env('THESIS_REPETITIONS', 3),

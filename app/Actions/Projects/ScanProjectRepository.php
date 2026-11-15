@@ -23,6 +23,7 @@ final class ScanProjectRepository
         private readonly PrepareLocalDirectoryRevision $prepareLocalDirectory,
         private readonly RepositoryInventoryScanner $scanner,
         private readonly PhpRevisionAnalyzer $phpAnalyzer,
+        private readonly GenerateProjectProfile $generateProjectProfile,
     ) {}
 
     public function assertSourceAvailable(Project $project): void
@@ -71,6 +72,7 @@ final class ScanProjectRepository
                 $snapshot->rootPath,
                 $run,
             );
+            $this->generateProjectProfile->handle($snapshot->revision);
             $completedAt = now();
             $step->update([
                 'status' => 'completed',

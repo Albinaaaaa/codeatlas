@@ -92,6 +92,9 @@ class RepositoryScanTest extends TestCase
                 ->where('project.source.scan.revision', $revision->identifier)
                 ->where('project.source.scan.files_count', 3)
                 ->where('project.source.scan.issues_count', 0)
+                ->where('overview.revision.id', $revision->id)
+                ->where('overview.statistics.files', 3)
+                ->where('overview.profile.primary_language', 'PHP')
                 ->where('sourceEndpoints.scan', route('projects.scan', $project)),
             );
     }

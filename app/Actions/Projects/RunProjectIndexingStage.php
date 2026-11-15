@@ -20,6 +20,7 @@ final class RunProjectIndexingStage
     public function __construct(
         private readonly RepositoryInventoryScanner $scanner,
         private readonly PhpRevisionAnalyzer $phpAnalyzer,
+        private readonly GenerateProjectProfile $generateProjectProfile,
     ) {}
 
     public function handle(int $revisionId, int $runId, string $stage): void
@@ -47,6 +48,9 @@ final class RunProjectIndexingStage
                 $records = $analysis->filesAnalyzed;
                 $metadata = ['php_files_analyzed' => $analysis->filesAnalyzed, 'php_symbols' => $analysis->symbolsPersisted, 'php_relations' => $analysis->relationsPersisted, 'issues_count' => $analysis->issuesPersisted, 'laravel_routes' => $analysis->routesPersisted, 'laravel_models' => $analysis->modelsPersisted, 'laravel_model_relations' => $analysis->modelRelationsPersisted, 'database_tables' => $analysis->databaseTablesPersisted, 'database_columns' => $analysis->databaseColumnsPersisted, 'database_indexes' => $analysis->databaseIndexesPersisted, 'database_foreign_keys' => $analysis->databaseForeignKeysPersisted];
                 $this->mergeStatistics($run, $metadata);
+            } elseif ($stage === 'project_profile') {
+                $this->generateProjectProfile->handle($revision);
+                $metadata = ['message' => 'Generated from deterministic indexed facts.'];
             } else {
                 $metadata = ['message' => 'Completed as part of the deterministic revision analysis.'];
             }

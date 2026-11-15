@@ -66,6 +66,7 @@ services:
             context: .
             dockerfile: Dockerfile
             target: development
+        user: www-data
         restart: unless-stopped
         working_dir: /var/www/html
         command: php artisan horizon

@@ -90,6 +90,9 @@ export default function AskIndex({ project, configuration, endpoints }: Props) {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [questionError, setQuestionError] = useState('');
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>(
+        {},
+    );
     const [retryAvailable, setRetryAvailable] = useState(false);
     const keyRef = useRef<string | null>(null);
     const payloadRef = useRef<{
@@ -280,6 +283,7 @@ export default function AskIndex({ project, configuration, endpoints }: Props) {
 
         setError('');
         setQuestionError('');
+        setFieldErrors({});
         let payload = payloadRef.current;
 
         if (!retry || !payload || !keyRef.current) {
@@ -349,10 +353,30 @@ export default function AskIndex({ project, configuration, endpoints }: Props) {
                 errors?: Record<string, string[]>;
             };
 
-            if (failure.status === 422 && failure.errors?.question?.[0]) {
-                setQuestionError(failure.errors.question[0]);
+            if (
+                failure.status &&
+                failure.status >= 400 &&
+                failure.status < 500
+            ) {
                 keyRef.current = null;
                 payloadRef.current = null;
+                setRetryAvailable(false);
+                setFieldErrors(failure.errors ?? {});
+
+                if (failure.errors?.question?.[0]) {
+                    setQuestionError(failure.errors.question[0]);
+                }
+
+                const hasVisibleFieldError = [
+                    'revision_id',
+                    'question',
+                    'model',
+                    'retrieval_method',
+                ].some((field) => Boolean(failure.errors?.[field]?.[0]));
+
+                if (!hasVisibleFieldError) {
+                    setError(failure.message || t('ask.error'));
+                }
             } else {
                 setError(failure.message || t('ask.error'));
                 setRetryAvailable(
@@ -430,11 +454,18 @@ export default function AskIndex({ project, configuration, endpoints }: Props) {
                                                 id="revision"
                                                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                                 value={revisionId}
-                                                onChange={(event) =>
+                                                onChange={(event) => {
                                                     setRevisionId(
                                                         event.target.value,
-                                                    )
-                                                }
+                                                    );
+
+                                                    setFieldErrors(
+                                                        (errors) => ({
+                                                            ...errors,
+                                                            revision_id: [],
+                                                        }),
+                                                    );
+                                                }}
                                                 disabled={
                                                     submitting || retryAvailable
                                                 }
@@ -451,6 +482,11 @@ export default function AskIndex({ project, configuration, endpoints }: Props) {
                                                     </option>
                                                 ))}
                                             </select>
+                                            <InputError
+                                                message={
+                                                    fieldErrors.revision_id?.[0]
+                                                }
+                                            />
                                             {revisionId && (
                                                 <p className="font-mono text-xs break-all text-muted-foreground">
                                                     {t('ask.fingerprint')}:{' '}
@@ -474,9 +510,18 @@ export default function AskIndex({ project, configuration, endpoints }: Props) {
                                                 id="model"
                                                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                                                 value={model}
-                                                onChange={(event) =>
-                                                    setModel(event.target.value)
-                                                }
+                                                onChange={(event) => {
+                                                    setModel(
+                                                        event.target.value,
+                                                    );
+
+                                                    setFieldErrors(
+                                                        (errors) => ({
+                                                            ...errors,
+                                                            model: [],
+                                                        }),
+                                                    );
+                                                }}
                                                 disabled={
                                                     submitting || retryAvailable
                                                 }
@@ -492,6 +537,9 @@ export default function AskIndex({ project, configuration, endpoints }: Props) {
                                                     ),
                                                 )}
                                             </select>
+                                            <InputError
+                                                message={fieldErrors.model?.[0]}
+                                            />
                                         </div>
                                         <div className="space-y-2">
                                             <Label htmlFor="method">
@@ -501,11 +549,19 @@ export default function AskIndex({ project, configuration, endpoints }: Props) {
                                                 id="method"
                                                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                                                 value={method}
-                                                onChange={(event) =>
+                                                onChange={(event) => {
                                                     setMethod(
                                                         event.target.value,
-                                                    )
-                                                }
+                                                    );
+
+                                                    setFieldErrors(
+                                                        (errors) => ({
+                                                            ...errors,
+                                                            retrieval_method:
+                                                                [],
+                                                        }),
+                                                    );
+                                                }}
                                                 disabled={
                                                     submitting || retryAvailable
                                                 }
@@ -523,6 +579,12 @@ export default function AskIndex({ project, configuration, endpoints }: Props) {
                                                     ),
                                                 )}
                                             </select>
+                                            <InputError
+                                                message={
+                                                    fieldErrors
+                                                        .retrieval_method?.[0]
+                                                }
+                                            />
                                         </div>
                                         <div className="space-y-2">
                                             <Label htmlFor="question">
@@ -533,11 +595,19 @@ export default function AskIndex({ project, configuration, endpoints }: Props) {
                                                 className="min-h-32 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                                                 maxLength={4000}
                                                 value={question}
-                                                onChange={(event) =>
+                                                onChange={(event) => {
                                                     setQuestion(
                                                         event.target.value,
-                                                    )
-                                                }
+                                                    );
+                                                    setQuestionError('');
+
+                                                    setFieldErrors(
+                                                        (errors) => ({
+                                                            ...errors,
+                                                            question: [],
+                                                        }),
+                                                    );
+                                                }}
                                                 disabled={
                                                     submitting || retryAvailable
                                                 }

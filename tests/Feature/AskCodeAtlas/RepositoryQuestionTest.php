@@ -151,6 +151,7 @@ class RepositoryQuestionTest extends TestCase
 
         $this->actingAs($project->owner)->get('/projects/'.$project->id.'/ask')
             ->assertOk()
+            ->assertSee('name="csrf-token"', false)
             ->assertInertia(fn (Assert $page) => $page
                 ->component('projects/ask/index')
                 ->where('project.id', $project->id)

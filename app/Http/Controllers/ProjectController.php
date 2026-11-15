@@ -108,7 +108,60 @@ class ProjectController extends Controller
             'models' => $this->modelsFor($project),
             'asyncStructure' => [],
             'database' => $this->databaseFor($project),
+            'overview' => $this->overviewFor($project),
         ]);
+    }
+
+    /** @return array<string, mixed> */
+    private function overviewFor(Project $project): array
+    {
+        $revision = $project->revisions()->latest('id')->first();
+        if ($revision === null) {
+            return [
+                'revision' => null, 'last_analysis' => null, 'profile' => null,
+                'technologies' => [], 'statistics' => [], 'async' => [], 'issues' => [],
+            ];
+        }
+
+        $projectId = (int) $project->id;
+        $revisionId = (int) $revision->id;
+        $scope = static fn ($query) => $query->where('project_id', $projectId)->where('project_revision_id', $revisionId);
+        $run = $project->indexRuns()->where('project_revision_id', $revisionId)->latest('id')->first();
+        $statistics = [
+            'files' => DB::table('code_files')->where($scope)->count(),
+            'php_symbols' => DB::table('code_symbols')->where($scope)->count(),
+            'routes' => DB::table('laravel_routes')->where($scope)->count(),
+            'models' => DB::table('laravel_models')->where($scope)->count(),
+            'database_tables' => DB::table('database_tables')->where($scope)->count(),
+            'jobs' => DB::table('code_symbol_roles')->where($scope)->where('role', 'job')->count(),
+            'events' => DB::table('code_symbol_roles')->where($scope)->where('role', 'event')->count(),
+            'listeners' => DB::table('code_symbol_roles')->where($scope)->where('role', 'listener')->count(),
+            'issues' => DB::table('analysis_issues')->where($scope)->count(),
+        ];
+        $async = DB::table('code_symbol_roles as roles')
+            ->join('code_symbols as symbols', 'symbols.id', '=', 'roles.code_symbol_id')
+            ->where('roles.project_id', $projectId)->where('roles.project_revision_id', $revisionId)
+            ->whereIn('roles.role', ['job', 'event', 'listener'])
+            ->orderBy('symbols.qualified_name')->orderBy('roles.role')
+            ->get(['symbols.id', 'symbols.qualified_name', 'symbols.kind', 'roles.role'])
+            ->map(fn (object $row): array => ['id' => (int) $row->id, 'name' => (string) $row->qualified_name, 'kind' => (string) $row->kind, 'role' => (string) $row->role])
+            ->all();
+        $issues = DB::table('analysis_issues')->where($scope)->latest('id')->limit(20)->get()
+            ->map(fn (object $issue): array => ['id' => (int) $issue->id, 'severity' => (string) $issue->severity, 'title' => (string) $issue->title, 'source_path' => $issue->source_path, 'start_line' => $issue->start_line === null ? null : (int) $issue->start_line])
+            ->all();
+
+        $startedAt = $run?->getAttribute('started_at');
+        $completedAt = $run?->getAttribute('completed_at');
+
+        return [
+            'revision' => ['id' => $revisionId, 'identifier' => (string) $revision->identifier, 'branch' => $revision->branch, 'commit_hash' => $revision->commit_hash, 'message' => $revision->message],
+            'last_analysis' => $run === null ? null : ['status' => $run->status, 'started_at' => $startedAt instanceof Carbon ? $startedAt->toISOString() : null, 'completed_at' => $completedAt instanceof Carbon ? $completedAt->toISOString() : null, 'failure_reason' => $run->failure_reason],
+            'profile' => $project->profile()->where('metadata->project_revision_id', $revisionId)->first()?->only(['summary', 'architecture', 'primary_language', 'framework', 'framework_version']),
+            'technologies' => $project->technologies()->where('metadata->project_revision_id', $revisionId)->orderBy('category')->orderBy('name')->get(['name', 'category', 'version', 'confidence'])->map(fn ($technology): array => $technology->toArray())->all(),
+            'statistics' => $statistics,
+            'async' => $async,
+            'issues' => $issues,
+        ];
     }
 
     /**
