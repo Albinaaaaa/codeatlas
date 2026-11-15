@@ -27,14 +27,20 @@ final class RunExperiments
      *
      * @param  callable(array<string, mixed>): void|null  $progress
      * @param  callable(): bool|null  $stop
+     * @param  array<string, array{ollama_version: ?string, model_digest: ?string}>|null  $expectedModelProvenance
+     * @param  callable(array<string, array{ollama_version: ?string, model_digest: ?string}>): void|null  $onPrepared
      * @return array<string, mixed>
      */
     public function run(string $path, int $repetitions, bool $dryRun = false, ?int $limit = null,
         bool $resume = false, ?callable $progress = null, ?callable $stop = null,
-        ?string $expectedExperimentId = null, ?array $expectedModelProvenance = null, bool $retryFailed = true): array
+        ?string $expectedExperimentId = null, ?array $expectedModelProvenance = null, bool $retryFailed = true,
+        ?callable $onPrepared = null, ?int $retryBeforeAttemptId = null): array
     {
         if ($repetitions < 1 || ($limit !== null && $limit < 1)) {
             throw new InvalidArgumentException('Repetitions and limit must be positive integers.');
+        }
+        if ($retryBeforeAttemptId !== null && $retryBeforeAttemptId < 0) {
+            throw new InvalidArgumentException('Retry cutoff must be a non-negative attempt ID.');
         }
         $dataset = $this->validator->validate($path);
         if ($dataset['errors'] !== []) {
@@ -72,23 +78,42 @@ final class RunExperiments
             throw new InvalidArgumentException('Prepared experiment identity changed; prepare a new experiment.');
         }
         $provenance = $dryRun ? [] : $this->provenance();
-        if ($expectedModelProvenance !== null && $expectedModelProvenance !== $provenance) {
+        if ($expectedModelProvenance !== null && $this->records->identityHash($expectedModelProvenance) !== $this->records->identityHash($provenance)) {
             throw new InvalidArgumentException('Model provenance changed during the experiment; prepare a new experiment.');
+        }
+        if (! $dryRun && $expectedExperimentId !== null) {
+            foreach ($provenance as $model) {
+                if ($model['model_digest'] === null || $model['ollama_version'] === null) {
+                    throw new InvalidArgumentException('Verified model provenance is required to resume a prepared experiment.');
+                }
+            }
+            foreach (ThesisExperimentAttempt::query()->where('experiment_key', $experiment)->where('status', 'successful')->get() as $saved) {
+                $savedProvenance = $saved->details()['model_provenance'] ?? null;
+                if (! is_array($savedProvenance) || $this->records->identityHash($savedProvenance) !== $this->records->identityHash($provenance[$saved->requested_model] ?? [])) {
+                    throw new InvalidArgumentException('Saved successful model provenance changed; the experiment cannot resume.');
+                }
+            }
+        }
+        if (! $dryRun && $onPrepared !== null) {
+            $onPrepared($provenance);
         }
         $attempted = 0;
         $skipped = 0;
         $deferred = 0;
+        $retryable = 0;
         $interrupted = false;
         foreach ($cases as &$case) {
             $previousStatus = null;
+            $previousAttemptId = null;
             $modelProvenance = $provenance[$case['model']] ?? ['ollama_version' => null, 'model_digest' => null];
             $case['case_key'] = $this->records->identityHash(['experiment_key' => $experiment, 'case' => $case, 'model_provenance' => $modelProvenance]);
             $case['status'] = 'pending';
             $case['provenance_verified'] = $modelProvenance['model_digest'] !== null && $modelProvenance['ollama_version'] !== null;
             if (! $dryRun) {
-                $history = ThesisExperimentAttempt::query()->where('case_key', $case['case_key'])->orderByDesc('id')->get(['status']);
+                $history = ThesisExperimentAttempt::query()->where('case_key', $case['case_key'])->orderByDesc('id')->get(['id', 'status']);
                 $case['status'] = $history->contains('status', 'successful') ? 'successful' : ($history->first()?->getAttribute('status') ?? 'pending');
                 $previousStatus = $history->first()?->getAttribute('status');
+                $previousAttemptId = $history->first()?->id;
                 if ($case['status'] === 'successful' && ! $case['provenance_verified']) {
                     $case['status'] = 'pending';
                 }
@@ -101,17 +126,25 @@ final class RunExperiments
 
                 continue;
             }
-            if ($resume && ! $retryFailed && in_array($case['status'], ['failed', 'incomplete'], true)) {
+            if ($resume && in_array($case['status'], ['failed', 'incomplete'], true)
+                && (! $retryFailed || ($retryBeforeAttemptId !== null && $previousAttemptId > $retryBeforeAttemptId))) {
                 $deferred++;
+
+                continue;
+            }
+            if ($limit !== null && $attempted >= $limit) {
+                if (in_array($case['status'], ['failed', 'incomplete'], true)) {
+                    $retryable++;
+                }
 
                 continue;
             }
             if (($stop !== null && $stop()) || $interrupted) {
                 $interrupted = true;
+                if (in_array($case['status'], ['failed', 'incomplete'], true)) {
+                    $retryable++;
+                }
 
-                continue;
-            }
-            if ($limit !== null && $attempted >= $limit) {
                 continue;
             }
             if (config('thesis') !== $configuration || config('services.ollama.url') !== $endpoint) {
@@ -151,7 +184,7 @@ final class RunExperiments
                 fn (array $item): bool => $item['model_digest'] !== null && $item['ollama_version'] !== null)) === count(self::MODELS),
             'case_identity_final' => ! $dryRun, 'questions' => count($questions), 'repetitions' => $repetitions,
             'total' => count($cases), 'attempted' => $attempted, 'completed' => $completed, 'failed' => $counts['failed'] ?? 0,
-            'incomplete' => $counts['incomplete'] ?? 0, 'skipped' => $skipped, 'deferred' => $deferred, 'pending' => $counts['pending'] ?? 0,
+            'incomplete' => $counts['incomplete'] ?? 0, 'skipped' => $skipped, 'deferred' => $deferred, 'retryable' => $retryable, 'pending' => $counts['pending'] ?? 0,
             'remaining' => count($cases) - $completed, 'interrupted' => $interrupted, 'cases' => $cases];
     }
 

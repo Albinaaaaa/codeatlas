@@ -26,15 +26,17 @@ final class RevisionChunks
         if ($chunks === []) {
             throw new InvalidArgumentException('Revision has no generated chunks. Run thesis:build-chunks explicitly first.');
         }
+        $ordered = [];
         foreach ($chunks as $chunk) {
             $chunk->setRelation('revision', $revision);
             if ($chunk->start_line === null || $chunk->end_line === null || $chunk->start_line < 1 || $chunk->end_line < $chunk->start_line) {
                 throw new InvalidArgumentException('Chunk source ranges are invalid; rebuild chunks explicitly.');
             }
+            $ordered[] = ['chunk' => $chunk, 'order' => $this->order($chunk)];
         }
-        usort($chunks, fn (CodeChunk $a, CodeChunk $b): int => $this->order($a) <=> $this->order($b));
+        usort($ordered, fn (array $a, array $b): int => $a['order'] <=> $b['order']);
 
-        return $chunks;
+        return array_column($ordered, 'chunk');
     }
 
     public function id(CodeChunk $chunk): string

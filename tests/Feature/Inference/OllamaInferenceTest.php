@@ -12,11 +12,13 @@ use App\Models\User;
 use App\PhpAnalysis\PhpRevisionAnalyzer;
 use App\RepositoryScanning\RepositoryInventoryScanner;
 use App\RepositoryScanning\ResolvedRepositorySnapshot;
+use Illuminate\Cache\ArrayStore;
 use Illuminate\Contracts\Debug\ShouldntReport;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -117,6 +119,36 @@ class OllamaInferenceTest extends TestCase
         $this->assertNull($result['token_comparison']['actual_prompt_tokens']);
         $this->assertNull($result['token_comparison']['estimated_minus_actual']);
         $this->assertNull($result['token_comparison']['actual_prompt_plus_output_reserve_fits_num_ctx']);
+    }
+
+    public function test_shared_lock_outlives_inspection_and_generation_and_prevents_overlapping_requests(): void
+    {
+        $revision = $this->indexed();
+        $this->freezeTime();
+        config(['services.ollama.lock_store' => 'array', 'thesis.inference.timeout_seconds' => 600]);
+        $store = Cache::store('array')->getStore();
+        $this->assertInstanceOf(ArrayStore::class, $store);
+        $started = now()->copy();
+        Http::fake(function (Request $request, array $transport) use ($store, $started) {
+            $key = 'codeatlas:ollama-inference';
+            $this->assertSame(660, $store->locks[$key]['expiresAt']->getTimestamp() - $started->getTimestamp());
+            $this->assertFalse($store->lock($key, 660)->get());
+            if (str_ends_with($request->url(), '/api/show')) {
+                $this->assertSame(10, $transport['timeout']);
+                $this->travel(10)->seconds();
+
+                return Http::response($this->metadata());
+            }
+            $this->assertSame(600, $transport['timeout']);
+            $this->travel(599)->seconds();
+            $this->assertFalse($store->lock($key, 660)->get());
+
+            return Http::response(self::reply());
+        });
+        app(OllamaInference::class)->ask($revision->id, 'answer', 'keyword', 'qwen2.5-coder:1.5b');
+        $lock = $store->lock('codeatlas:ollama-inference', 660);
+        $this->assertTrue($lock->get());
+        $lock->release();
     }
 
     public function test_truncated_and_unknown_completion_reasons_are_not_successful_complete_answers(): void

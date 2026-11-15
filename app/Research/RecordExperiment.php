@@ -4,6 +4,7 @@ namespace App\Research;
 
 use App\Inference\OllamaInferenceException;
 use App\Models\ProjectRevision;
+use App\Models\ResearchExperiment;
 use App\Models\ThesisExperimentAttempt;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -83,17 +84,36 @@ final class RecordExperiment
             'request' => $result['request'], 'model_provenance' => $provenance];
         $runKey = $this->identityHash($identity);
         try {
-            return DB::transaction(fn () => ThesisExperimentAttempt::forceCreate([
-                'project_id' => $revision->project_id, 'project_revision_id' => $question->revisionId, 'run_key' => $runKey,
-                'experiment_key' => $execution['experiment_key'] ?? null, 'case_key' => $execution['case_key'] ?? null,
-                'attempt_id' => $attemptId, 'repetition_index' => $repetitionIndex, 'dataset_id' => $question->datasetId,
-                'dataset_version' => $question->datasetVersion, 'dataset_sha256' => $question->datasetSha256, 'split' => $question->split,
-                'question_id' => $question->id, 'revision_fingerprint' => $question->fingerprint, 'protocol_version' => $result['protocol_version'],
-                'method' => $result['method'], 'requested_model' => $result['requested_model'], 'returned_model' => $result['returned_model'] ?? null,
-                'prompt_version' => $result['prompt_template_version'], 'prompt_sha256' => $result['prompt_hash'], 'status' => $status,
-                'payload' => ['dataset_question' => $question->evaluationData(), 'inference' => $result, 'model_provenance' => $provenance,
-                    'execution' => $execution],
-            ]));
+            return DB::transaction(function () use ($revision, $execution, $status, $question, $runKey, $attemptId, $repetitionIndex, $result, $provenance): ThesisExperimentAttempt {
+                if ($execution !== null && ResearchExperiment::query()->where('project_id', $revision->project_id)
+                    ->where('experiment_identity', $execution['experiment_key'])->exists()) {
+                    // Serialize success checks and inserts without keeping a transaction open during inference.
+                    ProjectRevision::query()->whereKey($revision->id)->lockForUpdate()->firstOrFail();
+                    $successful = ThesisExperimentAttempt::query()->where('project_id', $revision->project_id)
+                        ->where('experiment_key', $execution['experiment_key'])->where('question_id', $question->id)
+                        ->where('requested_model', $result['requested_model'])->where('method', $result['method'])
+                        ->where('repetition_index', $repetitionIndex)->where('status', 'successful')->first();
+                    if ($successful !== null) {
+                        if ($successful->case_key !== $execution['case_key']) {
+                            throw new InvalidArgumentException('A successful case with different provenance already exists.');
+                        }
+
+                        return $successful;
+                    }
+                }
+
+                return ThesisExperimentAttempt::forceCreate([
+                    'project_id' => $revision->project_id, 'project_revision_id' => $question->revisionId, 'run_key' => $runKey,
+                    'experiment_key' => $execution['experiment_key'] ?? null, 'case_key' => $execution['case_key'] ?? null,
+                    'attempt_id' => $attemptId, 'repetition_index' => $repetitionIndex, 'dataset_id' => $question->datasetId,
+                    'dataset_version' => $question->datasetVersion, 'dataset_sha256' => $question->datasetSha256, 'split' => $question->split,
+                    'question_id' => $question->id, 'revision_fingerprint' => $question->fingerprint, 'protocol_version' => $result['protocol_version'],
+                    'method' => $result['method'], 'requested_model' => $result['requested_model'], 'returned_model' => $result['returned_model'] ?? null,
+                    'prompt_version' => $result['prompt_template_version'], 'prompt_sha256' => $result['prompt_hash'], 'status' => $status,
+                    'payload' => ['dataset_question' => $question->evaluationData(), 'inference' => $result, 'model_provenance' => $provenance,
+                        'execution' => $execution],
+                ]);
+            });
         } catch (UniqueConstraintViolationException) {
             throw new InvalidArgumentException('Attempt UUID already exists; stored attempts cannot be overwritten.');
         }

@@ -219,7 +219,7 @@ return [
             'maxJobs' => 0,
             'memory' => 256,
             'tries' => 1,
-            'timeout' => 1200,
+            'timeout' => 2460,
             'nice' => 0,
         ],
         'supervisor-ask' => [
@@ -250,7 +250,7 @@ return [
             ],
             'supervisor-research' => [
                 'maxProcesses' => 1,
-                'timeout' => 1200,
+                'timeout' => 2460,
                 'tries' => 1,
             ],
         ],
@@ -266,7 +266,7 @@ return [
             ],
             'supervisor-research' => [
                 'maxProcesses' => 1,
-                'timeout' => 1200,
+                'timeout' => 2460,
                 'tries' => 1,
             ],
         ],

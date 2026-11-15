@@ -13,8 +13,8 @@ use App\Models\ResearchExperiment;
 use App\Models\ThesisExperimentAttempt;
 use App\Models\User;
 use App\Research\CreateResearchExperiment;
+use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -64,8 +64,11 @@ class ExperimentController extends Controller
         $this->authorizeExperiment($project, $experiment);
         $resultsUnlocked = $experiment->getAttribute('results_unlocked_at') !== null;
         $heartbeat = $experiment->getAttribute('heartbeat_at');
-        if ($experiment->status === 'running' && is_string($heartbeat) && Carbon::parse($heartbeat)->lt(now()->subMinutes(27))) {
-            $experiment->forceFill(['status' => 'interrupted', 'safe_error' => __('ui.research.experiment_interrupted'), 'finished_at' => now()])->save();
+        $staleBefore = now()->subSeconds(RunResearchExperimentBatchJob::TIMEOUT_SECONDS + 120);
+        if ($experiment->status === 'running' && $heartbeat instanceof CarbonInterface && $heartbeat->lt($staleBefore)) {
+            ResearchExperiment::query()->whereKey($experiment->id)->where('status', 'running')
+                ->where('heartbeat_at', '<', $staleBefore)
+                ->update(['status' => 'interrupted', 'safe_error' => __('ui.research.experiment_interrupted'), 'finished_at' => now()]);
             $experiment->refresh();
         }
 
@@ -108,19 +111,25 @@ class ExperimentController extends Controller
     public function resume(Project $project, ResearchExperiment $experiment): RedirectResponse
     {
         $this->authorizeExperiment($project, $experiment);
-        $identity = DB::transaction(function () use ($experiment): string {
+        [$identity, $retryBeforeAttemptId] = DB::transaction(function () use ($experiment, $project): array {
             $locked = ResearchExperiment::query()->lockForUpdate()->findOrFail($experiment->id);
-            if (! in_array($locked->status, ['partially_completed', 'interrupted'], true) || $locked->manual_retry_rounds >= 2
+            $retryFailures = ($locked->failed_cases > 0 || $locked->incomplete_cases > 0) && $locked->manual_retry_rounds < 2;
+            if (! in_array($locked->status, ['partially_completed', 'interrupted'], true)
+                || ($locked->pending_cases === 0 && ! $retryFailures)
                 || $locked->getAttribute('results_unlocked_at') !== null) {
                 throw ValidationException::withMessages(['experiment' => __('ui.research.experiment_not_resumable')]);
             }
+            $retryBeforeAttemptId = $retryFailures ? (int) ThesisExperimentAttempt::query()->where('project_id', $project->id)
+                ->where('experiment_key', $locked->experiment_identity)->max('id') : null;
             $identity = (string) Str::uuid();
             $locked->forceFill(['status' => 'queued', 'execution_identity' => $identity, 'batch_number' => 1,
-                'manual_retry_rounds' => $locked->manual_retry_rounds + 1, 'heartbeat_at' => now(), 'finished_at' => null])->save();
+                'manual_retry_rounds' => $locked->manual_retry_rounds + ($retryFailures ? 1 : 0), 'heartbeat_at' => now(), 'finished_at' => null,
+                'safe_error' => null])->save();
 
-            return $identity;
+            return [$identity, $retryBeforeAttemptId];
         });
-        RunResearchExperimentBatchJob::dispatch($experiment->id, $identity, 1, retryFailed: true)->onConnection('redis')->onQueue('research');
+        RunResearchExperimentBatchJob::dispatch($experiment->id, $identity, 1,
+            retryFailed: $retryBeforeAttemptId !== null, retryBeforeAttemptId: $retryBeforeAttemptId)->onConnection('redis')->onQueue('research');
 
         return back();
     }
